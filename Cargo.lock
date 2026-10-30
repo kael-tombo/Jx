@@ -515,6 +515,20 @@ dependencies = [
 [[package]]
 name = "jx-maven"
 version = "0.1.0"
+dependencies = [
+ "base64",
+ "hex",
+ "jx-common",
+ "jx-testsupport",
+ "quick-xml",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tempfile",
+ "toml",
+ "ureq",
+]
 
 [[package]]
 name = "jx-package"
@@ -535,6 +549,13 @@ dependencies = [
 [[package]]
 name = "jx-testsupport"
 version = "0.1.0"
+dependencies = [
+ "base64",
+ "hex",
+ "jx-common",
+ "sha1",
+ "sha2",
+]
 
 [[package]]
 name = "jx-toolchain"
@@ -632,6 +653,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.37.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -774,6 +804,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "sha1"
+version = "0.10.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]

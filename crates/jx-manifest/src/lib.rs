@@ -9,7 +9,6 @@
 //! docs/manifest.md; `set_jdk` performs a comment- and
 //! format-preserving line edit, never a reserialization.
 
-use std::fmt::Write as _;
 use std::path::Path;
 
 use jx_common::error::{JxError, Kind};
@@ -38,28 +37,10 @@ pub struct Manifest {
     pub main: Option<String>,
 }
 
-/// Simplest useful did-you-mean over the allowed key names.
-fn closest<'a>(input: &str, candidates: &[&'a str]) -> Option<&'a str> {
-    let input = input.to_lowercase();
-    candidates
-        .iter()
-        .copied()
-        .filter(|c| c.len().abs_diff(input.len()) <= 3)
-        .min_by_key(|c| {
-            c.chars().zip(input.chars()).filter(|(a, b)| a != b).count()
-                + c.len().abs_diff(input.len())
-        })
-}
+use jx_common::diagnose::{closest, unknown_key_error as shared_unknown_key_error};
 
 fn unknown_key_error(kind_table: &str, key: &str, candidates: &[&str]) -> JxError {
-    let mut message = format!("unknown key `{key}` in the `{kind_table}` table");
-    if let Some(c) = closest(key, candidates) {
-        let _ = write!(message, "\n       did you mean `{c}`?");
-    }
-    JxError::new(Kind::Manifest, message).hint(format!(
-        "allowed {kind_table} keys: {}",
-        candidates.join(", ")
-    ))
+    shared_unknown_key_error(Kind::Manifest, kind_table, key, candidates)
 }
 /// Discover the manifest like cargo does: from `start` up through parent
 /// directories. Returns the file path of `project.toml`.

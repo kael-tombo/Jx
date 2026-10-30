@@ -8,6 +8,7 @@
 pub mod cache;
 pub mod color;
 pub mod config;
+pub mod diagnose;
 pub mod error;
 pub mod paths;
 

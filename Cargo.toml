@@ -10,6 +10,7 @@ license = "Apache-2.0 OR MIT"
 [workspace.dependencies]
 jx-common = { path = "crates/jx-common" }
 jx-manifest = { path = "crates/jx-manifest" }
+jx-testsupport = { path = "crates/jx-testsupport" }
 jx-toolchain = { path = "crates/jx-toolchain" }
 jx-build = { path = "crates/jx-build" }
 jx-run = { path = "crates/jx-run" }

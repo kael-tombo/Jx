@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+
+[workspace.dependencies]
+jx-common = { path = "crates/jx-common" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+sha2 = "0.10"
+hex = "0.4"
+fs4 = "0.8"
+tempfile = "3"
+
+[profile.release]
+# Reviewed again for M8 release hardening; conservative defaults for now.
+lto = true
+codegen-units = 1

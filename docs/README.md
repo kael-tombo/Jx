@@ -1,0 +1,62 @@
+# jx documentation index
+
+`jx` is a single-binary command line tool that makes developing Java feel like
+`cargo` (Rust) or `uv` (Python): one tool, one manifest (`project.toml`), one
+lockfile (`jx.lock`). It manages JDKs, resolves dependencies from Maven
+Central, and builds, tests, runs and packages a project — while always
+offering the exit back to Maven or Gradle.
+
+## Where things live
+
+| Path | Purpose |
+| --- | --- |
+| [decisions/](decisions/) | ADRs (MADR). Template: [decisions/TEMPLATE.md](decisions/TEMPLATE.md) |
+| [exit-codes.md](exit-codes.md) | The stable exit-code contract |
+| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | What jx honestly does not do yet |
+
+Planned for later milestones but not yet written:
+
+* `docs/manifest.md` — the project.toml specification (M1/M3)
+* `docs/quickstart.md` — the executed-in-CI quickstart (M1)
+* `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
+
+## Workspace layout
+
+```text
+jx/
+  crates/
+    jx-cli/         # clap commands, output, error rendering
+    jx-common/      # shared infrastructure: errors, color, JX_HOME, cache (ADR 0001)
+    jx-manifest/    # project.toml model, validation, comment-preserving edits
+    jx-lock/        # lockfile model, deterministic TOML serialization
+    jx-toolchain/   # JDK discovery, download, verify, extract, pin
+    jx-maven/       # POM model, version ordering, repository client, metadata
+    jx-resolve/     # graph building, conflict policy, tree and why
+    jx-build/       # javac, fingerprints, test running
+    jx-package/     # jar, dist layout, jdeps/jlink, export maven and gradle
+    jx-run/         # Runner trait, plain-main runner
+    jx-interop/     # Maven and Gradle import, compatibility mode, delegate engines
+    jx-testsupport/ # fake repository server, fixtures, differential harness
+  docs/  corpus/  xtask/
+```
+
+Crates marked "placeholder" in their doc comment are reserved for upcoming
+milestones; nothing in this repository claims to support them yet.
+
+## Roadmap (mirrors the brief's milestone table)
+
+| Milestone | Content | Status |
+| --- | --- | --- |
+| M0 | Workspace, CI, ADRs, docs skeleton, config/cache, error framework, `jx --version`, `jx doctor` | **in flight** |
+| M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | not started |
+| M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | not started |
+| M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | not started |
+| M4 | javac integration, fingerprint skip, resources, processors, JUnit launcher | not started |
+| M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | not started |
+| M6 | Runtime trimming: jdeps + jlink with fallback | not started |
+| M7 | Maven and Gradle interop: import, compatibility, delegate, exports | not started |
+| M8 | Release hardening: docs, install script, security checklist | not started |
+
+Items requiring verification against live documentation before implementation
+are collected in the brief (section 15); the relevant ADR records the verified
+answers when each lands.

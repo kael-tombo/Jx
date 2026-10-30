@@ -1,0 +1,15 @@
+[package]
+name = "jx-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "jx"
+path = "src/main.rs"
+
+[dependencies]
+jx-common = { workspace = true }
+clap = { workspace = true }
+fs4 = { workspace = true }

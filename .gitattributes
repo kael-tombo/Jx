@@ -1,0 +1,7 @@
+# jx lockfile and docs must stay LF everywhere for byte-identical output
+* text=auto
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.lock text eol=lf

@@ -4,3 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
+
+[dependencies]
+jx-common = { workspace = true }
+jx-manifest = { workspace = true }
+jx-toolchain = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

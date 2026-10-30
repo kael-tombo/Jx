@@ -35,9 +35,18 @@ Windows (x64).
 ## Right now
 
 ```sh
-jx --version     # show the version
+jx new hello     # scaffold a project (no JDK needed anywhere)
+cd hello         # pin: temurin 25, the current LTS
+jx run           # first run downloads & installs nothing but the JDK,
+                 # then javac-compiles and runs: "Hello, jx!"
+jx run --offline # afterwards, cached runs need no network (~1 s)
+
+jx jdk list      # jx-managed JDKs live in ~/.jx/jdks, never near system Java
 jx doctor        # diagnose jx's home, cache, network, system Java, disk
 ```
+
+Not yet usable (they report their milestone): add/lock/tree/why (M3),
+test (M4), export (M5/M7), import (M7).
 
 ## Repository
 

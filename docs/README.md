@@ -47,8 +47,8 @@ milestones; nothing in this repository claims to support them yet.
 
 | Milestone | Content | Status |
 | --- | --- | --- |
-| M0 | Workspace, CI, ADRs, docs skeleton, config/cache, error framework, `jx --version`, `jx doctor` | **in flight** |
-| M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | not started |
+| M0 | Workspace, CI, ADRs, docs skeleton, config/cache, error framework, `jx --version`, `jx doctor` | done |
+| M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | **done** |
 | M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | not started |
 | M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | not started |
 | M4 | javac integration, fingerprint skip, resources, processors, JUnit launcher | not started |

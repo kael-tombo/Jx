@@ -1,5 +1,6 @@
 [package]
 name = "jx-cli"
+description = "jx: a Cargo/uv-style front door for Java"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,5 +12,12 @@ path = "src/main.rs"
 
 [dependencies]
 jx-common = { workspace = true }
+jx-manifest = { workspace = true }
+jx-toolchain = { workspace = true }
+jx-build = { workspace = true }
+jx-run = { workspace = true }
 clap = { workspace = true }
 fs4 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

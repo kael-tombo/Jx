@@ -19,10 +19,22 @@ use jx_resolve::{Edge, Resolution, SolvedNode};
 
 use crate::Cli;
 
+/// One locked main artifact: the cache path plus the coordinate pieces a
+/// distributable layout needs for its file name.
+#[derive(Debug, Clone)]
+pub(crate) struct LockedJar {
+    pub group_id: String,
+    pub artifact_id: String,
+    pub version: String,
+    pub classifier: Option<String>,
+    pub path: PathBuf,
+}
+
 /// The locked jars a build needs. `main` excludes artifacts reachable only
 /// through `[dev-dependencies]`; `test` contains everything.
 pub(crate) struct Classpaths {
     pub main: Vec<PathBuf>,
+    pub main_jars: Vec<LockedJar>,
     pub test: Vec<PathBuf>,
     /// The JUnit Platform console standalone jar, when the project depends on it.
     pub junit_launcher: Option<PathBuf>,
@@ -344,6 +356,7 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
         if !declared {
             return Ok(Classpaths {
                 main: Vec::new(),
+                main_jars: Vec::new(),
                 test: Vec::new(),
                 junit_launcher: None,
             });
@@ -387,12 +400,20 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
 fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxError> {
     let cache = jx_common::cache::Cache::new(home);
     let mut main = Vec::new();
+    let mut main_jars = Vec::new();
     let mut test = Vec::new();
     let mut junit_launcher = None;
     for artifact in &lock.artifacts {
         let path = cache.path_of(&artifact.sha256)?;
         if !artifact.dev {
             main.push(path.clone());
+            main_jars.push(LockedJar {
+                group_id: artifact.group_id.clone(),
+                artifact_id: artifact.artifact_id.clone(),
+                version: artifact.version.clone(),
+                classifier: artifact.classifier.clone(),
+                path: path.clone(),
+            });
         }
         if artifact.artifact_id == "junit-platform-console-standalone" {
             junit_launcher = Some(path.clone());
@@ -401,6 +422,7 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
     }
     Ok(Classpaths {
         main,
+        main_jars,
         test,
         junit_launcher,
     })
@@ -943,6 +965,8 @@ mod tests {
         };
         let cp = classpaths_from_lock(&lock, dir.path()).unwrap();
         assert_eq!(cp.main, vec![cache.path_of(&main_sha).unwrap()]);
+        assert_eq!(cp.main_jars.len(), 1);
+        assert_eq!(cp.main_jars[0].artifact_id, "main");
         assert_eq!(cp.test.len(), 3);
         assert_eq!(
             cp.junit_launcher,

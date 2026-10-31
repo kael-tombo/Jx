@@ -1,6 +1,7 @@
-//! CLI orchestration of build, test and run: manifest → classpaths → JDK →
-//! javac → (optionally) JUnit or the main-class launch. Entrypoint discovery
-//! lives in `jx-run`, compilation and fingerprints in `jx-build`.
+//! CLI orchestration of build, test, run and package: manifest → classpaths →
+//! JDK → javac → (optionally) JUnit, the main-class launch or a dist tree.
+//! Entrypoint discovery lives in `jx-run`, compilation and fingerprints in
+//! `jx-build`, jar and dist assembly in `jx-package`.
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
@@ -174,6 +175,84 @@ pub fn test(cli: &Cli) -> Result<ExitCode, JxError> {
         })?;
     let code = status.code().unwrap_or(1);
     Ok(ExitCode::from(code as u8))
+}
+
+/// The optional main class for packaging: pinned, discovered when unique,
+/// absent for a library, and an error when discovery is ambiguous.
+fn package_main(
+    classes: &std::path::Path,
+    pinned: Option<&String>,
+) -> Result<Option<String>, JxError> {
+    if let Some(pinned) = pinned {
+        return Ok(Some(pinned.clone()));
+    }
+    let candidates = jx_run::discover_main(classes)?;
+    match candidates.len() {
+        0 => Ok(None),
+        1 => Ok(candidates.into_iter().next()),
+        _ => jx_run::decide_main(classes, None).map(Some),
+    }
+}
+
+/// `jx package`: compile main sources, then write a runnable thin jar plus
+/// its main dependencies under `target/dist`.
+pub fn package(cli: &Cli) -> Result<(), JxError> {
+    let loaded = load(cli)?;
+    let deps = deps::classpaths(cli)?;
+    let feature = loaded.manifest.jdk_feature()?;
+    let jdk = ensure_jdk(cli, feature)?;
+    let (classes, _) = compile_main(&loaded, &jdk, &deps)?;
+    let main_class = package_main(&classes, loaded.manifest.main_class())?;
+    let jar_name = jx_package::jar_file_name(&loaded.manifest.name, &loaded.manifest.version)?;
+
+    let mut relative_paths = Vec::with_capacity(deps.main_jars.len());
+    for jar in &deps.main_jars {
+        let file_name = jx_package::artifact_file_name(
+            &jar.artifact_id,
+            &jar.version,
+            jar.classifier.as_deref(),
+        )?;
+        relative_paths.push(jx_package::dependency_relative_path(
+            &jar.group_id,
+            &file_name,
+        )?);
+    }
+    let dependencies: Vec<jx_package::DependencyJar<'_>> = relative_paths
+        .iter()
+        .zip(&deps.main_jars)
+        .map(|(relative_path, jar)| jx_package::DependencyJar {
+            relative_path,
+            source: &jar.path,
+        })
+        .collect();
+    let dist = target_dir(&loaded).join("dist");
+    let output = jx_package::package(&jx_package::PackageRequest {
+        dist_dir: &dist,
+        classes_dir: &classes,
+        jar_name: &jar_name,
+        main_class: main_class.as_deref(),
+        dependencies: &dependencies,
+    })?;
+    let display = output
+        .jar
+        .strip_prefix(&loaded.manifest_dir)
+        .unwrap_or(&output.jar);
+    println!(
+        "packaged {} ({} dependenc{})",
+        display.display(),
+        output.dependency_count,
+        if output.dependency_count == 1 {
+            "y"
+        } else {
+            "ies"
+        }
+    );
+    if main_class.is_some() {
+        println!("  run: java -jar {}", output.jar.display());
+    } else {
+        println!("  library jar (no Main-Class)");
+    }
+    Ok(())
 }
 
 /// `jx run [-- args]`, with optional `--debug [--port N]`.

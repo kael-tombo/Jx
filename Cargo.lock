@@ -483,6 +483,7 @@ dependencies = [
  "jx-lock",
  "jx-manifest",
  "jx-maven",
+ "jx-package",
  "jx-resolve",
  "jx-run",
  "jx-testsupport",
@@ -544,6 +545,11 @@ dependencies = [
 [[package]]
 name = "jx-package"
 version = "0.1.0"
+dependencies = [
+ "jx-common",
+ "tempfile",
+ "zip",
+]
 
 [[package]]
 name = "jx-resolve"

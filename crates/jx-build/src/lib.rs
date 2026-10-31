@@ -57,6 +57,7 @@ pub fn compile_if_stale(request: &CompileRequest<'_>) -> Result<bool, JxError> {
         request.sources_root,
         request.out,
         request.classpath,
+        request.cache_dir,
     )?;
     write_fingerprint(request.cache_dir, &hash)?;
     Ok(true)
@@ -77,7 +78,7 @@ pub fn command_fingerprint(
     classpath: &[PathBuf],
 ) -> Result<String, JxError> {
     let mut hasher = sha2::Sha256::new();
-    feed(&mut hasher, b"jx-build-fingerprint-v1");
+    feed(&mut hasher, b"jx-build-fingerprint-v2");
     feed(&mut hasher, javac.to_string_lossy().as_bytes());
     feed(&mut hasher, &feature.to_be_bytes());
     feed(&mut hasher, out.to_string_lossy().as_bytes());
@@ -158,13 +159,15 @@ fn write_fingerprint(cache_dir: &Path, hash: &str) -> Result<(), JxError> {
 /// Compile `src/main/java` into `out` with `javac --release <feature>`.
 /// `classpath` holds the locked dependency jars (empty for a plain project).
 /// Streams javac's own output; on a non-zero exit the error is diagnosed
-/// with the suggested next step.
+/// with the suggested next step. The argument file lives in `args_dir` (the
+/// build cache), never in the classes output, so it can never be packaged.
 pub fn compile(
     javac: &Path,
     feature: u32,
     sources_root: &Path,
     out: &Path,
     classpath: &[PathBuf],
+    args_dir: &Path,
 ) -> Result<(), JxError> {
     let sources = collect_files(sources_root, Some("java"));
     if sources.is_empty() {
@@ -190,7 +193,12 @@ pub fn compile(
             .caused_by(e)
     })?;
 
-    let argfile = out.join("jx-javac-args.txt");
+    std::fs::create_dir_all(args_dir).map_err(|e| {
+        JxError::new(Kind::Io, "cannot create the javac argument cache directory")
+            .at(args_dir.display().to_string())
+            .caused_by(e)
+    })?;
+    let argfile = args_dir.join("javac-args.txt");
     let args = build_argfile(feature, out, &sources, classpath);
     std::fs::write(&argfile, &args).map_err(|e| {
         JxError::new(Kind::Io, "cannot write the javac argument file")
@@ -427,6 +435,7 @@ mod tests {
             &dir.path().join("src"),
             &dir.path().join("out"),
             &[],
+            &dir.path().join("cache"),
         )
         .expect_err("no sources");
         assert_eq!(e.kind, Kind::Build);

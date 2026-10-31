@@ -19,6 +19,7 @@ jx-resolve = { workspace = true }
 jx-toolchain = { workspace = true }
 jx-build = { workspace = true }
 jx-run = { workspace = true }
+jx-package = { workspace = true }
 clap = { workspace = true }
 fs4 = { workspace = true }
 

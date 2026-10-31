@@ -3,18 +3,19 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M4 done; M5 next)
+## Current (M5 in progress; thin packaging done)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
-`jx why`, `jx build`, `jx test`, `jx run`, `jx clean`. M2 delivered the
+`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx clean`. M2 delivered the
 repository client (fetch with always-on checksum verification, mirrors,
 proxies, auth references, content cache), POM/`maven-metadata.xml` models,
 Maven version ordering and the effective-POM loader. M3 added the resolver,
 the lockfile, the six dependency commands, and the lock fast path that puts
 cached jars on javac's and java's classpath. M4 added fingerprint-skipped
 javac builds, separate main/test dependency classpaths, test compilation and
-JUnit 5 execution.
+JUnit 5 execution. M5's first slice added thin jars and the `target/dist`
+layout; shading, jlink images and `export maven` are still open.
 
 ### Manifest
 
@@ -123,7 +124,25 @@ JUnit 5 execution.
 - **Build fingerprints are local, not remote.** A fresh checkout or a
   `jx clean` recompiles; jx does not share compilation outputs between
   machines.
-- **`jx build` does not produce a jar**; packaging is M5.
+- **`jx build` does not produce a jar**; use `jx package` for artifacts.
+
+### Packaging (M5 slice)
+
+- **Only a thin jar is produced.** `target/dist/<name>-<version>.jar`
+  contains the project's classes and resources; dependencies are separate
+  jars under `target/dist/lib/<group path>/`. There is no fat/shaded jar,
+  no jar signing and no jlink/jdeps trimming yet.
+- **The `Class-Path` manifest uses relative paths** into `lib/`; the whole
+  `target/dist` tree can be moved and still run with `java -jar` from any
+  working directory. The jar is not standalone without its `lib/` tree.
+- **Packaging is application and library friendly**: a discovered or pinned
+  main class becomes `Main-Class`; a library with no main class still gets a
+  jar, without that header. Ambiguous main classes fail rather than choosing
+  one silently.
+- **No launch scripts or native installers.** Users run `java -jar` today.
+- **`jx clean` removes `target/dist`** with the rest of `target/`.
+- **`jx export maven` remains unimplemented**; packaging does not yet emit an
+  equivalent Maven build.
 
 ### Toolchain (from M1)
 
@@ -143,9 +162,9 @@ JUnit 5 execution.
   validated at parse time).
 - **Doctor's network probe is still DNS+TCP only**; the repository client's
   TLS/proxy behaviour is exercised by the M2 layer, not yet by `jx doctor`.
-- **The cache layer serves three consumers**: JDK archives (M1), Maven
-  artifacts via the repository client (M2/M3) and the build classpath
-  (M3).
+- **The cache layer serves four consumers**: JDK archives (M1), Maven
+  artifacts via the repository client (M2/M3), the build classpath (M3) and
+  dependency copies into `target/dist` (M5).
 
 ### CI / release
 

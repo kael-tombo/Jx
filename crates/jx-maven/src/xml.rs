@@ -188,6 +188,9 @@ pub struct Dependency {
     pub artifact_id: String,
     /// `None` inherits from dependencyManagement or the parent.
     pub version: Option<String>,
+    /// `<type>` of the artifact (`jar` default when absent; `pom` for BOM
+    /// import entries). BOM-import recognition lives in the effective model.
+    pub package_type: Option<String>,
     pub classifier: Option<String>,
     /// `None` is a real (not set) scope; the empty default for `<dependencies>`
     /// is `compile` and applies during merge, never here.
@@ -351,6 +354,7 @@ fn parse_dependency(dependency: &Element) -> Dependency {
             .unwrap_or_default()
             .to_string(),
         version: dependency.child_text("version").map(str::to_string),
+        package_type: dependency.child_text("type").map(str::to_string),
         classifier: dependency.child_text("classifier").map(str::to_string),
         scope: dependency.child_text("scope").map(str::to_string),
         optional: dependency

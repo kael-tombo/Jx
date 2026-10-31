@@ -2,6 +2,7 @@
 //! workspace crates behind the extension points listed in docs/README.md.
 
 mod build;
+mod deps;
 mod doctor;
 mod scaffold;
 
@@ -39,9 +40,9 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M1 (toolchain + hello). Live: jx jdk <command>, jx new, jx init, \
-jx build, jx run and jx doctor. Dependency resolution lands in M3, full packaging in \
-M5, Maven/Gradle interop in M7."
+small manifest.\n\nStatus: M3 (dependency resolution and lockfile). Live: jx jdk <command>, \
+jx new/init, jx add/remove, jx lock/fetch, jx tree/why, jx build/run and jx doctor. \
+Full packaging lands in M5 and Maven/Gradle interop in M7."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -50,7 +51,7 @@ struct Cli {
     /// Work without network access (installs refuse; cached work continues).
     #[arg(long, global = true)]
     offline: bool,
-    /// Fail if the lock would change (no effect yet; planned M3).
+    /// Fail if resolving would change jx.lock
     #[arg(long, global = true)]
     locked: bool,
     /// Path to project.toml.
@@ -78,17 +79,35 @@ enum Command {
     Init,
     /// Convert an existing Maven or Gradle build (planned M7)
     Import { path: Option<PathBuf> },
-    /// Add a dependency to the manifest (planned M3)
-    Add { dependency: String },
-    /// Remove a dependency (planned M3)
-    Remove { alias: String },
-    /// Resolve and write jx.lock (planned M3)
+    /// Add a dependency, then update jx.lock
+    Add {
+        /// group:artifact[:version] (a missing version picks the latest stable release)
+        dependency: String,
+        /// Add to [dev-dependencies]
+        #[arg(long)]
+        dev: bool,
+        /// Add a `{ platform = … }` BOM entry instead of a normal dependency
+        #[arg(long)]
+        platform: bool,
+        /// Local alias (default: the artifact id)
+        #[arg(long, value_name = "NAME")]
+        alias: Option<String>,
+    },
+    /// Remove a dependency, then update jx.lock
+    Remove {
+        /// The local alias from project.toml
+        alias: String,
+        /// Remove from [dev-dependencies] instead of [dependencies]
+        #[arg(long)]
+        dev: bool,
+    },
+    /// Resolve the graph and write jx.lock
     Lock,
-    /// Download the pinned JDK and locked artifacts (planned M3)
+    /// Download and verify the artifacts pinned in jx.lock
     Fetch,
-    /// Print the resolved dependency graph (planned M3)
+    /// Print the resolved dependency graph
     Tree,
-    /// Explain why an artifact is in the graph (planned M3)
+    /// Explain why an artifact is in the graph
     Why { coord: String },
     /// Compile with the pinned JDK
     Build,
@@ -177,36 +196,19 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
             "M7",
             "use Maven or Gradle until then",
         )),
-        Command::Add { .. } => Err(unimplemented(
-            "add",
-            "M3",
-            "edit pom.xml or build.gradle until then",
-        )),
-        Command::Remove { .. } => Err(unimplemented(
-            "remove",
-            "M3",
-            "edit pom.xml or build.gradle until then",
-        )),
-        Command::Lock => Err(unimplemented(
-            "lock",
-            "M3",
-            "use Maven or Gradle until then",
-        )),
-        Command::Fetch => Err(unimplemented(
-            "fetch",
-            "M3",
-            "run `jx jdk install` meanwhile",
-        )),
-        Command::Tree => Err(unimplemented(
-            "tree",
-            "M3",
-            "see `mvn dependency:tree` / `gradle dependencies`",
-        )),
-        Command::Why { .. } => Err(unimplemented(
-            "why",
-            "M3",
-            "see `mvn dependency:tree` / `gradle dependencies`",
-        )),
+        Command::Add {
+            dependency,
+            dev,
+            platform,
+            alias,
+        } => deps::add(cli, dependency, *dev, *platform, alias.clone()).map(|()| ExitCode::SUCCESS),
+        Command::Remove { alias, dev } => {
+            deps::remove(cli, alias, *dev).map(|()| ExitCode::SUCCESS)
+        }
+        Command::Lock => deps::lock(cli).map(|()| ExitCode::SUCCESS),
+        Command::Fetch => deps::fetch(cli).map(|()| ExitCode::SUCCESS),
+        Command::Tree => deps::tree(cli).map(|()| ExitCode::SUCCESS),
+        Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
         Command::Test => Err(unimplemented(
             "test",
             "M4",

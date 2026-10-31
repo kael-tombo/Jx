@@ -8,14 +8,18 @@
 //! - [`xml`]: POM and `maven-metadata.xml` parsing (data-only models).
 //! - [`client`]: the repository client — mirrors, proxies, auth refs,
 //!   checksum verification, content cache and parallel fetching.
+//! - [`effective`]: the effective-POM loader — parent chains, inheritance
+//!   merging, `${...}` interpolation and BOM-import consolidation.
 //!
 //! See `docs/decisions/0003-repository-client-and-pom-model.md`.
 
 pub mod client;
 pub mod coords;
+pub mod effective;
 pub mod version;
 pub mod xml;
 
 pub use client::{Client, FetchOutcome};
 pub use coords::Coordinate;
+pub use effective::{EffectivePom, PomLoader};
 pub use version::ComparableVersion;

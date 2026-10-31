@@ -345,6 +345,45 @@ impl Client {
             .unwrap_or(false)
     }
 
+    /// The artifact-level `maven-metadata.xml` — the version list ADR 0004
+    /// expands wanted prefixes against. `Ok(None)` means no configured
+    /// repository publishes a listing (the caller decides what that is
+    /// worth). Checksum-verified like everything else.
+    pub fn fetch_version_listing(
+        &self,
+        coord: &Coordinate,
+    ) -> Result<Option<FetchOutcome>, JxError> {
+        let path = format!("{}/maven-metadata.xml", coord.metadata_directory(false));
+        if self.offline {
+            return match self.fetch_cached(&path) {
+                Ok(outcome) => Ok(Some(outcome)),
+                Err(cause) => Err(JxError::new(
+                    Kind::Network,
+                    format!(
+                        "the version list of {}:{} is not in the offline cache",
+                        coord.group_id, coord.artifact_id
+                    ),
+                )
+                .at(path)
+                .caused_by(cause)
+                .hint(
+                    "resolve once while online, or pin the version exactly (`=2.0.16`) \
+                     so no listing is needed",
+                )),
+            };
+        }
+        for repo in &self.repositories {
+            let selected = self.selected(repo);
+            let url = format!("{}{}", selected.url, path);
+            match self.get_with_checksum(&selected, &path, &url) {
+                Ok(Some(outcome)) => return Ok(Some(outcome)),
+                Ok(None) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(None)
+    }
+
     /// GET one path with checksum verification on success. `Ok(None)` is a
     /// 404 — the caller tries the next repository.
     fn get_with_checksum(
@@ -457,9 +496,13 @@ impl Client {
             })
             .collect();
         let mut bytes = Vec::new();
+        // One byte over the limit: a response that stops at exactly the cap
+        // is a truncation worth reporting, not a silently shortened artifact
+        // that then "fails its checksum".
+        let limit = 64 * 1024 * 1024;
         response
             .into_reader()
-            .take(64 * 1024 * 1024)
+            .take(limit as u64 + 1)
             .read_to_end(&mut bytes)
             .map_err(|e| {
                 JxError::new(Kind::Network, "the repository response was cut short")
@@ -467,6 +510,16 @@ impl Client {
                     .caused_by(e)
                     .hint("retry once; repeated truncation usually means a broken proxy")
             })?;
+        if bytes.len() > limit {
+            return Err(
+                JxError::new(Kind::Network, "the response exceeds jx's 64 MiB limit")
+                    .at(url)
+                    .hint(
+                        "jx refuses responses past 64 MiB; if you think a legitimate artifact \
+                 hits this, file it against jx",
+                    ),
+            );
+        }
         Ok(HttpGet {
             body: Some(bytes),
             headers,

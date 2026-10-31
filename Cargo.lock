@@ -478,8 +478,12 @@ dependencies = [
  "fs4",
  "jx-build",
  "jx-common",
+ "jx-lock",
  "jx-manifest",
+ "jx-maven",
+ "jx-resolve",
  "jx-run",
+ "jx-testsupport",
  "jx-toolchain",
  "tempfile",
 ]
@@ -502,6 +506,11 @@ version = "0.1.0"
 [[package]]
 name = "jx-lock"
 version = "0.1.0"
+dependencies = [
+ "jx-common",
+ "tempfile",
+ "toml",
+]
 
 [[package]]
 name = "jx-manifest"
@@ -537,6 +546,13 @@ version = "0.1.0"
 [[package]]
 name = "jx-resolve"
 version = "0.1.0"
+dependencies = [
+ "jx-common",
+ "jx-manifest",
+ "jx-maven",
+ "jx-testsupport",
+ "tempfile",
+]
 
 [[package]]
 name = "jx-run"

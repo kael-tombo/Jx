@@ -3,64 +3,124 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M1: toolchain + hello)
+## Current (M3 done; M4 next)
 
-Live now: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
-`jx new`, `jx init`, `jx build`, `jx run`, `jx clean`. The M0 caveats below
-that still apply are marked.
+Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
+`jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
+`jx why`, `jx build`, `jx run`, `jx clean`. M2 delivered the repository
+client (fetch with always-on checksum verification, mirrors, proxies, auth
+references, content cache), POM/`maven-metadata.xml` models, Maven version
+ordering and the effective-POM loader. M3 added the resolver, the lockfile,
+the six dependency commands, and the lock fast path that puts cached jars on
+javac's and java's classpath.
 
-### Toolchain
+### Manifest
+
+- **Dependency tables are parsed and validated** (`docs/manifest.md` rules:
+  coordinate shape, `=` exact pins, SNAPSHOT rejection, `platform` BOM
+  entries, dupes within a table) and `[overrides]` too (`group:artifact`
+  keys, version values, SNAPSHOT rejection). Both are consumed by the
+  resolver (`jx-resolve`, below).
+- **`jx add`/`jx remove` edit the file as text**, preserving comments,
+  ordering and line endings. Both commands resolve and rewrite `jx.lock`
+  afterwards; a failure restores the manifest byte for byte. One coordinate
+  per invocation, and a versionless add needs a reachable version listing
+  (it writes the latest stable release).
+
+### Resolver (M3 core, `jx-resolve`)
+
+- **Nearest-wins with loser-subtree alignment, every fork reported** — the
+  conflict list is part of the resolution result; nothing trims silently
+  (ADR 0004). Equal depth = first declaration wins, also reported.
+- **Wanted prefixes expand against the repositories' listings** to the
+  highest *stable* release (pre-releases never auto-picked; `=` pins exact).
+  Verified by unit + fake-repo tests, not against a real Maven remote (no
+  network in CI).
+- **Platform BOMs supply versions** to same-table entries that name none;
+  the BOM itself is never a build artifact.
+- **Exclusions are honored below the edge that declares them**; a nearer
+  winning path's inclusion is not undone by a losing path's exclusion (V1
+  simplification, Maven-shaped).
+- **Transitive SNAPSHOTs are rejected** with an actionable message; V1's
+  lockfile pins bytes, which re-resolving snapshot builds cannot satisfy.
+- **POM-declared `<repositories>` are parsed but deliberately not fetched
+  from** — `config.toml` is the only trust anchor in V1.
+- **The graph is flat for the JVM**: `jx build`/`run` put every locked
+  artifact on one classpath, including `[dev-dependencies]`; compile/test/
+  runtime scope separation is M4 work.
+- **Artifacts are assumed to be jars.** POM dependencies with a non-jar
+  `type` (AAR, test-jar, …) are fetched at the `.jar` path today; the
+  manifest grammar has no `type` field in V1.
+- **`jx tree`/`jx why` re-resolve** (from the content cache when offline);
+  they do not reconstruct the graph from `jx.lock`. The lockfile stores
+  artifacts, not parent edges or a manifest hash.
+- **`jx lock` re-expands wanted prefixes**, so it is the explicit refresh
+  command in V1; there is no separate `jx update`. A concrete version stays
+  put only while the resolved artifact set is unchanged.
+- **Manual manifest edits are detected by mtime** on the build path: if
+  `project.toml` is newer than `jx.lock`, `jx build`/`run` re-lock (or fail
+  under `--locked`). A manifest restored with an older timestamp can leave a
+  stale lock until `jx lock` is run explicitly.
+
+### Repository client (M2)
+
+- **The client is exercised by integration tests** against a local fake
+  repository (fetch, mirrors, auth, cache, effective POMs) and by the CLI's
+  M3 end-to-end tests; live Maven Central is not part of CI.
+- **Effective-POM support is reached by the CLI through the resolver**:
+  parent-chain fetching, inheritance merging, `${...}` interpolation and BOM
+  (`scope=import`) consolidation live in `jx_maven::PomLoader`. POM
+  `<repositories>` are parsed and merged but nothing fetches from them yet.
+- **Snapshot resolution is releases-only offline**: `--offline` refuses
+  snapshots, and the lockfile does not record a timestamped snapshot form
+  yet, so snapshot builds cannot be reproduced offline.
+- **Checksums are unconditional** (Maven 4 `fail` semantics): a repository
+  that publishes neither response headers nor `.sha1`/`.sha256` sidecars is a
+  hard error, never a warning. `?checksum=`-style URL overrides unsupported.
+- **Response bodies are capped at 64 MiB.** A response that would run over
+  the cap is refused with a "too large" message — never silently truncated,
+  so an oversized artifact can no longer masquerade as a checksum mismatch.
+- **Mirrors follow Maven's `mirrorOf` grammar, not globs**: `repo*` is a
+  literal id, `external:*`/`!id` behave exactly as Maven's selector does.
+- **Auth references are `env:VAR` / `bearer:env:VAR` only**; the secret value
+  is only ever read from the environment at fetch time.
+- **SHA-1 is a transport check only**; the integrity chain is the
+  sha256-pinned lockfile written by `jx lock`/`jx add` and re-checked by
+  `jx fetch` and every build's classpath fast path.
+- **The lockfile's `[jdk]` pin is read but not written yet**: `jx lock`
+  records dependencies only, so `jx fetch` validates a JDK pin only when one
+  exists (hand-written or from a future release).
+
+### POM model (M2)
+
+- **No active profiles.** Profile-gated repositories/dependencies/properties
+  are ignored entirely (Maven honours them); recorded in ADR 0003.
+- **POM repositories are parsed but not fetched from** — V1 merges and
+  diagnoses them, but `config.toml` remains the only trust anchor (ADR 0003).
+
+### Toolchain (from M1)
 
 - **The JDK provider is Eclipse Temurin over the Adoptium API only.** Other
   providers are behind `JdkProvider` but not implemented.
-- **`jx new`/`jx jdk install` default to Temurin 25**, the current LTS
-  verified on 2026-10-30 (ADR 0002). The pin is a checked-in constant, not a
-  network query, so scaffolding works offline.
-- **JDK archives download with only the API-provided sha256 as verification**
-  (streamed and re-verified on cache reuse). GPG signature verification is
-  part of the M8 security checklist.
-- **`--offline` refuses a missing pinned JDK** with a clear error, and
-  succeeds when that feature release is already installed. There is no
-  `jx fetch` yet (M3), so "offline after one download" means "offline after
-  the JDK for your pin is installed".
-- **Root-level symlink validation in tar.gz** covers link *targets* escaping
-  the tree; hard-link checks are thinner and belong to the M8 hardening.
+- **JDK archives download with only the API-provided sha256 as
+  verification**; GPG signing is part of the M8 security checklist.
+- **`--offline` refuses a missing pinned JDK** with a clear error.
+- **`jx test` is still a stub** naming M4; builds are not incremental yet,
+  though locked dependencies now reach the compile and run classpath.
 
-### Scaffold, build, run
+### Doctor, config, cache
 
-- **`jx new`/`init` write a fixed package `app`** regardless of project name;
-  renaming a package means editing sources.
-- **`--lib` scaffolds a JUnit 5 test that `jx test` cannot run yet** (M4 adds
-  the JUnit Platform launcher).
-- **Builds are not incremental and have no dependency classpath** (M3
-  resolver, then M4 fingerprints). `jx build` recompiles everything each
-  time; diagnostics stream straight from javac.
-- **`jx run` discovery matches only static `public void main(String[])`**;
-  instance-main / compact-source styles (a newer JDK feature) are not
-  discovered — pin `[run].main` for those.
-- **`jx run --debug` starts a suspend-on-launch JDWP server** with a fixed
-  default port 5005 (`--port`); no client-side tooling is provided.
-- **Long-classpath handling** via javac argument files is implemented, but
-  the `target/dist` layout, launchers, fat jar, `export` and runtime
-  trimming are all M5–M6 work not yet present.
-- **`jx test` is still a stub** that names M4. Everything else listed as a
-  planned milestone reports itself as unimplemented with its milestone.
-
-### Doctor, config, cache (still from M0)
-
-- **Doctor's network probe is DNS+TCP only.** TLS URLs (real transfers,
-  proxy environments, custom CAs, `NO_PROXY`) are M2 repository-client work;
-  corporate proxies with custom CAs may currently fail the *probe*, not jx
-  itself.
-- **config.toml parsing is permissive** about stray unknown keys; strict
-  diagnostics arrive with M2/M3.
-- **The cache layer is exercised for JDK archives**; no Maven artifact
-  download path exists yet (M2).
+- **config.toml and project.toml have strict diagnostics** (unknown keys get
+  did-you-mean; auth must be `env:` references; dependency coordinates are
+  validated at parse time).
+- **Doctor's network probe is still DNS+TCP only**; the repository client's
+  TLS/proxy behaviour is exercised by the M2 layer, not yet by `jx doctor`.
+- **The cache layer serves three consumers**: JDK archives (M1), Maven
+  artifacts via the repository client (M2/M3) and the build classpath
+  (M3).
 
 ### CI / release
 
 - **CI runs fmt/clippy/tests on Linux, macOS and Windows, plus cargo-deny**,
-  but the milestone's end-to-end scenarios are not yet exercised in CI (M8).
-- **No release binaries, no install script** (M8). Locally, this Windows dev
-  box builds jx with the windows-gnu toolchain (rustup's self-contained
-  linker + a portable MinGW in `~/mingw64`); CI stays MSVC.
+  but milestone end-to-end scenarios are not exercised in CI yet (M8).
+- **No release binaries, no install script** (M8).

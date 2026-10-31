@@ -45,9 +45,11 @@ fn ensure_jdk(cli: &Cli, feature: u32) -> Result<toolchain::InstalledJdk, JxErro
     toolchain::ensure_jdk(&home, feature)
 }
 
-/// `compile` + resource copy for the project the CLI resolved.
-fn compile_project(cli: &Cli, loaded: &Loaded) -> Result<(), JxError> {
+/// `compile` + resource copy for the project the CLI resolved. Returns the
+/// locked dependency jars so `run` can hand the same classpath to the JVM.
+fn compile_project(cli: &Cli, loaded: &Loaded) -> Result<Vec<std::path::PathBuf>, JxError> {
     let feature = loaded.manifest.jdk_feature()?;
+    let dependency_jars = crate::deps::classpath(cli)?;
     let jdk = ensure_jdk(cli, feature)?;
     let classes = loaded.manifest_dir.join("target").join("classes");
     jx_build::compile(
@@ -55,12 +57,13 @@ fn compile_project(cli: &Cli, loaded: &Loaded) -> Result<(), JxError> {
         feature,
         &loaded.manifest_dir.join("src/main/java"),
         &classes,
+        &dependency_jars,
     )?;
     let n = jx_build::copy_resources(&loaded.manifest_dir.join("src/main/resources"), &classes)?;
     if n > 0 {
         println!("  copied {n} resources");
     }
-    Ok(())
+    Ok(dependency_jars)
 }
 
 /// `jx build`
@@ -77,7 +80,7 @@ pub fn run(
     argv: Vec<String>,
 ) -> Result<std::process::ExitCode, JxError> {
     let loaded = load(cli)?;
-    compile_project(cli, &loaded)?;
+    let dependency_jars = compile_project(cli, &loaded)?;
     let feature = loaded.manifest.jdk_feature()?;
     let classes = loaded.manifest_dir.join("target").join("classes");
     let main_class = jx_run::decide_main(&classes, loaded.manifest.main_class())?;
@@ -86,9 +89,15 @@ pub fn run(
         println!("jx run: waiting for a debugger on port {port}…");
     }
     let runner = jx_run::PlainMainRunner;
+    let mut classpath = vec![classes.display().to_string()];
+    classpath.extend(
+        dependency_jars
+            .iter()
+            .map(|path| path.display().to_string()),
+    );
     let spec = jx_run::RunSpec {
         java: jdk.java(),
-        classpath: vec![classes.display().to_string()],
+        classpath,
         main_class,
         argv,
         debug_port,

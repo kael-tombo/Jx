@@ -1,17 +1,23 @@
 //! The project.toml model.
 //!
-//! M1 scope: the `[project]` table is parsed strictly (unknown keys are
-//! errors with a did-you-mean suggestion), every other table known to the
-//! full manifest format is recognized and carried opaquely for upcoming
-//! milestones, and unknown tables are rejected. The checkout of values that
-//! `jx build`/`run` need today lives in [`Manifest::jdk_feature`] and
-//! [`Manifest::main_class`]. The target format is specified in
-//! docs/manifest.md; `set_jdk` performs a comment- and
+//! Scope: the `[project]` table is parsed strictly (unknown keys are errors
+//! with a did-you-mean suggestion), `[dependencies]`/`[dev-dependencies]`
+//! entries are validated coordinate shapes (`deps` module; their selection
+//! semantics belong to the resolver), `[run]` re-parsed as in M1, other
+//! reserved tables are recognized opaquely, and unknown tables are rejected.
+//! The checkout of values that `jx build`/`run` need today lives in
+//! [`Manifest::jdk_feature`] and [`Manifest::main_class`]. The target format
+//! is specified in docs/manifest.md; `set_jdk` performs a comment- and
 //! format-preserving line edit, never a reserialization.
 
 use std::path::Path;
 
 use jx_common::error::{JxError, Kind};
+
+pub mod deps;
+pub mod edit;
+pub use deps::{DependencySpec, WantedVersion};
+pub use edit::{DepTable, add_dependency, has_alias, remove_dependency};
 
 /// Tables jx's manifest supports or reserves for upcoming milestones.
 const KNOWN_TABLES: [&str; 7] = [
@@ -35,11 +41,17 @@ pub struct Manifest {
     pub jdk: String,
     /// `[run] main` when set.
     pub main: Option<String>,
+    /// `[dependencies]`, validated shapes (semantics: the resolver, M3).
+    pub dependencies: Vec<deps::DependencySpec>,
+    /// `[dev-dependencies]`, validated shapes.
+    pub dev_dependencies: Vec<deps::DependencySpec>,
+    /// `[overrides]`, validated shapes: explicit, always-visible pins (ADR 0004).
+    pub overrides: Vec<deps::OverrideSpec>,
 }
 
 use jx_common::diagnose::{closest, unknown_key_error as shared_unknown_key_error};
 
-fn unknown_key_error(kind_table: &str, key: &str, candidates: &[&str]) -> JxError {
+pub(crate) fn unknown_key_error(kind_table: &str, key: &str, candidates: &[&str]) -> JxError {
     shared_unknown_key_error(Kind::Manifest, kind_table, key, candidates)
 }
 /// Discover the manifest like cargo does: from `start` up through parent
@@ -191,11 +203,19 @@ pub fn parse(path: &Path) -> Result<Manifest, JxError> {
         .unwrap_or("0.0.0")
         .to_string();
 
+    // Dependency tables are validated here so a typo in a coordinate fails
+    // at parse time, never deep inside resolution.
+    let (dependencies, dev_dependencies) = deps::parse_tables(table, path)?;
+    let overrides = deps::parse_overrides(table, path)?;
+
     Ok(Manifest {
         name,
         version,
         jdk,
         main,
+        dependencies,
+        dev_dependencies,
+        overrides,
     })
 }
 
@@ -377,5 +397,23 @@ mod tests {
         );
         let empty = tempdir().unwrap();
         assert!(find_manifest(empty.path()).is_err());
+    }
+
+    #[test]
+    fn dependency_coordinates_are_validated_during_parse() {
+        let dir = tempdir().unwrap();
+        let p = manifest_at(
+            dir.path(),
+            "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n\n[dependencies]\ng = \"g:a:1\"\nb = \"not a coordinate\"\n",
+        );
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("not a Maven coordinate"), "{e}");
+
+        let p = manifest_at(
+            dir.path(),
+            "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n\n[dependencies]\ns = \"g:a:1.0-SNAPSHOT\"\n",
+        );
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("SNAPSHOT"), "{e}");
     }
 }

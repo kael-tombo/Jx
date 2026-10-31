@@ -10,6 +10,9 @@ license = "Apache-2.0 OR MIT"
 [workspace.dependencies]
 jx-common = { path = "crates/jx-common" }
 jx-manifest = { path = "crates/jx-manifest" }
+jx-lock = { path = "crates/jx-lock" }
+jx-maven = { path = "crates/jx-maven" }
+jx-resolve = { path = "crates/jx-resolve" }
 jx-testsupport = { path = "crates/jx-testsupport" }
 jx-toolchain = { path = "crates/jx-toolchain" }
 jx-build = { path = "crates/jx-build" }
@@ -21,7 +24,7 @@ toml = "0.9"
 sha2 = "0.10"
 hex = "0.4"
 fs4 = "0.8"
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "2", features = ["json", "gzip"] }
 flate2 = "1"
 tar = "0.4"
 zip = { version = "4", default-features = false, features = ["deflate"] }

@@ -13,6 +13,9 @@ path = "src/main.rs"
 [dependencies]
 jx-common = { workspace = true }
 jx-manifest = { workspace = true }
+jx-lock = { workspace = true }
+jx-maven = { workspace = true }
+jx-resolve = { workspace = true }
 jx-toolchain = { workspace = true }
 jx-build = { workspace = true }
 jx-run = { workspace = true }
@@ -20,4 +23,5 @@ clap = { workspace = true }
 fs4 = { workspace = true }
 
 [dev-dependencies]
+jx-testsupport = { workspace = true }
 tempfile = { workspace = true }

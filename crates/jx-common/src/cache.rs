@@ -124,6 +124,25 @@ impl Cache {
             && sha256_hex.bytes().all(|b| b.is_ascii_hexdigit())
             && content_path(&self.root, sha256_hex).exists()
     }
+
+    /// The content path for a key, or a cache-miss error. Callers that put
+    /// this on a classpath must verify the entry first (`jx fetch`/the build
+    /// fast path do); the JVM cannot be handed a checksum.
+    pub fn path_of(&self, sha256_hex: &str) -> Result<PathBuf, JxError> {
+        if sha256_hex.len() != 64 || !sha256_hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(
+                JxError::new(Kind::Lock, "malformed sha256 key in cache lookup")
+                    .hint("run `jx fetch`; if this persists, report it"),
+            );
+        }
+        let path = content_path(&self.root, sha256_hex);
+        if !path.is_file() {
+            return Err(JxError::new(Kind::Io, "cache miss")
+                .at(path.display().to_string())
+                .hint("run `jx fetch`"));
+        }
+        Ok(path)
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +188,17 @@ mod tests {
         let hex = hex::encode(Sha256::digest(b"absent"));
         assert!(cache.get(&hex).is_err());
         assert!(!cache.has(&hex));
+        assert!(cache.path_of(&hex).is_err());
+    }
+
+    #[test]
+    fn path_of_returns_an_existing_content_file() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::new(dir.path());
+        let hex = cache.put(b"hello").unwrap();
+        let path = cache.path_of(&hex).unwrap();
+        assert!(path.is_file());
+        assert_eq!(std::fs::read(path).unwrap(), b"hello");
+        assert!(cache.path_of("nope").is_err());
     }
 }

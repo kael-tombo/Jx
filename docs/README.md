@@ -14,10 +14,14 @@ offering the exit back to Maven or Gradle.
 | [exit-codes.md](exit-codes.md) | The stable exit-code contract |
 | [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | What jx honestly does not do yet |
 
-Planned for later milestones but not yet written:
+Written so far: [manifest.md](manifest.md) — the project.toml specification;
+[repository.md](repository.md) — repositories, mirrors, proxies, auth
+references and integrity (repositories live in `config.toml`, per ADR
+0003); [decisions/0004-lockfile-and-resolution-policy.md](decisions/0004-lockfile-and-resolution-policy.md)
+— the lockfile, version selection and conflict rules M3 implements. Still
+planned for later milestones:
 
-* `docs/manifest.md` — the project.toml specification (M1/M3)
-* `docs/quickstart.md` — the executed-in-CI quickstart (M1)
+* `docs/quickstart.md` — the executed-in-CI quickstart
 * `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
 
 ## Workspace layout
@@ -49,8 +53,8 @@ milestones; nothing in this repository claims to support them yet.
 | --- | --- | --- |
 | M0 | Workspace, CI, ADRs, docs skeleton, config/cache, error framework, `jx --version`, `jx doctor` | done |
 | M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | **done** |
-| M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | not started |
-| M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | not started |
+| M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | done |
+| M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
 | M4 | javac integration, fingerprint skip, resources, processors, JUnit launcher | not started |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | not started |
 | M6 | Runtime trimming: jdeps + jlink with fallback | not started |

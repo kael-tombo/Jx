@@ -14,10 +14,17 @@ pub struct SourceSet {
     pub root: PathBuf,
 }
 
-/// Compile `src/main/java` (plus `[processors]`/dependencies later) into
-/// `out` with `javac --release <feature>`. Streams javac's own output; on a
-/// non-zero exit the error is diagnosed with the suggested next step.
-pub fn compile(javac: &Path, feature: u32, sources_root: &Path, out: &Path) -> Result<(), JxError> {
+/// Compile `src/main/java` into `out` with `javac --release <feature>`.
+/// `classpath` holds the locked dependency jars (empty for a plain project).
+/// Streams javac's own output; on a non-zero exit the error is diagnosed
+/// with the suggested next step.
+pub fn compile(
+    javac: &Path,
+    feature: u32,
+    sources_root: &Path,
+    out: &Path,
+    classpath: &[PathBuf],
+) -> Result<(), JxError> {
     let sources = collect_files(sources_root, Some("java"));
     if sources.is_empty() {
         return Err(JxError::new(
@@ -33,7 +40,7 @@ pub fn compile(javac: &Path, feature: u32, sources_root: &Path, out: &Path) -> R
     })?;
 
     let argfile = out.join("jx-javac-args.txt");
-    let args = build_argfile(feature, out, &sources);
+    let args = build_argfile(feature, out, &sources, classpath);
     std::fs::write(&argfile, &args).map_err(|e| {
         JxError::new(Kind::Io, "cannot write the javac argument file")
             .at(argfile.display().to_string())
@@ -61,7 +68,7 @@ pub fn compile(javac: &Path, feature: u32, sources_root: &Path, out: &Path) -> R
             Kind::Build,
             format!("javac failed (exit {})", status.code().unwrap_or(-1)),
         )
-        .hint("missing imports usually mean a dependency is absent; `jx add <group:artifact>` arrives in M3"));
+        .hint("missing imports usually mean a dependency is absent; add it with `jx add`"));
     }
     Ok(())
 }
@@ -97,11 +104,20 @@ pub fn copy_resources(resources_root: &Path, out: &Path) -> Result<usize, JxErro
     Ok(copied)
 }
 
-fn build_argfile(feature: u32, out: &Path, sources: &[PathBuf]) -> String {
+fn build_argfile(feature: u32, out: &Path, sources: &[PathBuf], classpath: &[PathBuf]) -> String {
     let mut args = String::new();
     args.push_str(&format!("--release {feature}\n"));
     args.push_str("-encoding UTF-8\n");
     args.push_str(&format!("-d {}\n", quote(out.to_string_lossy())));
+    if !classpath.is_empty() {
+        let separator = if cfg!(windows) { ";" } else { ":" };
+        let joined = classpath
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(separator);
+        args.push_str(&format!("-classpath {}\n", quote(joined)));
+    }
     for s in sources {
         args.push_str(&quote(s.to_string_lossy()));
         args.push('\n');
@@ -191,6 +207,25 @@ mod tests {
     }
 
     #[test]
+    fn argfile_adds_a_classpath_only_when_present() {
+        let out = Path::new("target/classes");
+        let sources = [PathBuf::from("src/main/java/app/App.java")];
+        let plain = build_argfile(25, out, &sources, &[]);
+        assert!(!plain.contains("-classpath"));
+        let jars = [
+            PathBuf::from("cache/content/aa/one.jar"),
+            PathBuf::from("cache/content/bb/two.jar"),
+        ];
+        let with = build_argfile(25, out, &sources, &jars);
+        assert!(with.contains("-classpath cache/content/aa/one.jar"));
+        assert!(with.contains(if cfg!(windows) {
+            "cache/content/aa/one.jar;cache/content/bb/two.jar"
+        } else {
+            "cache/content/aa/one.jar:cache/content/bb/two.jar"
+        }));
+    }
+
+    #[test]
     fn compile_without_sources_is_a_clear_error() {
         let dir = tempdir().unwrap();
         let fake_javac = dir.path().join("javac");
@@ -199,6 +234,7 @@ mod tests {
             25,
             &dir.path().join("src"),
             &dir.path().join("out"),
+            &[],
         )
         .expect_err("no sources");
         assert_eq!(e.kind, Kind::Build);

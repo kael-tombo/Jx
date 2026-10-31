@@ -581,3 +581,94 @@ fn cmp_comb(string_part: &str, digit_part: &Item, other: Option<&Item>) -> Order
         }
     }
 }
+
+/// Qualifier spellings jx classifies as *pre-releases* (never stable picks,
+/// ADR 0004). Long forms from Maven's ordering table, plus the short
+/// spellings that convention attaches to them (`1.0-M1`, `1.0-b01`) and the
+/// ones the ecosystem routinely publishes (`cr`, `ea`).
+const PRE_RELEASE_QUALIFIERS: [&str; 10] = [
+    "alpha",
+    "a",
+    "beta",
+    "b",
+    "milestone",
+    "m",
+    "rc",
+    "cr",
+    "snapshot",
+    "ea",
+];
+
+/// Whether a version reads as a pre-release: any Maven separator segment
+/// (`.`, `-`, `_`, `+`) whose leading letter run is a pre-release qualifier
+/// (`alpha1`, `b02`, `M3` segments down to `m`).
+///
+/// Text-level, deliberately: `ComparableVersion` ranks unknown qualifiers
+/// *above* the stable slot, so relying on the parse alone would let e.g.
+/// `5.0-M3` beat `5.0` in a pick — the check is about stability, not order.
+pub fn is_pre_release(version: &str) -> bool {
+    version
+        .to_lowercase()
+        .split(['.', '-', '_', '+'])
+        .any(|segment| {
+            let letters: String = segment
+                .chars()
+                .take_while(char::is_ascii_alphabetic)
+                .collect();
+            PRE_RELEASE_QUALIFIERS.contains(&letters.as_str())
+        })
+}
+
+#[cfg(test)]
+mod pre_release_tests {
+    use super::is_pre_release;
+
+    #[test]
+    fn releases_and_quality_markers_stay_stable() {
+        for version in [
+            "1.0.0",
+            "33.4.8-jre",
+            "25.0.1+9",
+            "2.17.292",
+            "1.0.0.Final",
+            "1.0.0-GA",
+            "5.2.1.RELEASE",
+            "1.0-android",
+        ] {
+            assert!(
+                !is_pre_release(version),
+                "{version} wrongly classified as a pre-release"
+            );
+        }
+    }
+
+    #[test]
+    fn pre_release_spellings_are_flagged() {
+        for version in [
+            "1.0-alpha",
+            "2.0.0-alpha1",
+            "1.0-b01",
+            "5.0-M1",
+            "5.2.1-m3",
+            "2.0.0-rc2",
+            "1.0-cr1",
+            "3.0.0_EA",
+            "1.0-snapshot",
+            "7.0.0-beta",
+        ] {
+            assert!(is_pre_release(version), "{version} should be a pre-release");
+        }
+    }
+
+    #[test]
+    fn continuation_words_are_not_qualifiers() {
+        // A letter run that merely *starts* like a qualifier is not one:
+        // only whole leading runs match.
+        for version in ["1.0-betamax", "1.0-released", "1.0-access"] {
+            assert!(
+                !is_pre_release(version),
+                "{version} wrongly classified as a pre-release"
+            );
+        }
+    }
+}

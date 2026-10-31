@@ -1,7 +1,7 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M0).** This README describes the intent of
-> the project, not yet its shipped abilities; see
+> **Status: under construction (M3 done; M4 next).** This README describes the
+> intent of the project, not yet its shipped abilities; see
 > [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
@@ -35,18 +35,27 @@ Windows (x64).
 ## Right now
 
 ```sh
-jx new hello     # scaffold a project (no JDK needed anywhere)
-cd hello         # pin: temurin 25, the current LTS
-jx run           # first run downloads & installs nothing but the JDK,
-                 # then javac-compiles and runs: "Hello, jx!"
-jx run --offline # afterwards, cached runs need no network (~1 s)
+jx new hello         # scaffold a project (no JDK needed anywhere)
+cd hello             # pin: temurin 25, the current LTS
+jx run               # first run downloads & installs nothing but the JDK,
+                     # then javac-compiles and runs: "Hello, jx!"
+jx run --offline     # afterwards, cached runs need no network (~1 s)
 
-jx jdk list      # jx-managed JDKs live in ~/.jx/jdks, never near system Java
-jx doctor        # diagnose jx's home, cache, network, system Java, disk
+# Dependencies and the lockfile
+jx add com.google.guava:guava:33
+jx tree              # resolved graph, with conflicts named
+jx why com.google.guava:guava
+jx lock              # resolve and record exact versions + sha256
+jx fetch             # download/verify exactly what jx.lock pins
+jx run               # javac and java get the locked jars on their classpath
+
+jx jdk list          # jx-managed JDKs live in ~/.jx/jdks, never near system Java
+jx doctor            # diagnose jx's home, cache, network, system Java, disk
 ```
 
-Not yet usable (they report their milestone): add/lock/tree/why (M3),
-test (M4), export (M5/M7), import (M7).
+Not yet usable (they report their milestone): test (M4), export (M5/M7),
+import (M7), and a separate `update` command (`jx lock` re-resolves wanted
+prefixes today).
 
 ## Repository
 

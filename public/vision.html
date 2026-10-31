@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision and principles | jx</title>
+  <meta name="description" content="Why jx is being designed, what smooth Java development means, and what the project does not claim to match.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/vision.html}}">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+  <script src="js/theme-init.js"></script>
+  <script type="module" src="js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="vision.html" aria-current="page">Vision</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="docs/quickstart.html">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="draft">
+    <div class="page">
+      <div class="wrap">
+        <header class="page-head">
+          <span class="badge" data-status="draft">Draft</span>
+          <h1>Vision and principles.</h1>
+          <p class="lede">Why jx is being designed, what smooth Java development would mean, and what the project does not claim to match.</p>
+        </header>
+
+        <div class="prose">
+          <section aria-labelledby="why-title">
+            <h2 id="why-title">Why this exists</h2>
+            <p>A new Java project starts with a build system, a JDK manager, a packaging tool and a way to run one file. Each choice is reasonable. Made together, they are a wall between a person and a first program.</p>
+            <p>Cargo, uv and npm each give their ecosystem one front door. You learn one manifest, one command set and one place to look when something fails. Java has excellent tools, but no single front door.</p>
+            <p>jx is a proposal for that door. It would manage the JDK, resolve dependencies from Maven Central, and build, test, run and package a project from one manifest. The destination is one run command: <code>jx run</code> for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE. It is written in Rust and will ship as one binary. Nothing is released yet.</p>
+          </section>
+
+          <section aria-labelledby="smooth-title">
+            <h2 id="smooth-title">What smooth means</h2>
+            <p>Smooth is not a feeling in a launch post. It is five properties that can be tested.</p>
+
+            <h3>One tool, one file</h3>
+            <p>A project has one manifest and one lockfile. The JDK pin, dependencies and build settings live together. A second file exists only to pin exact versions for another machine. The same <code>jx run</code> should work whether the project is plain Java or a framework.</p>
+
+            <h3>Minutes to first success</h3>
+            <p>The target is five minutes from a machine with nothing installed to a running program. The measurement will name the machine, the network and the method. Until then, the number is a target, not a result.</p>
+
+            <h3>Fast feedback</h3>
+            <p>Builds will skip work that did not change. A warm run after a one-line edit should take seconds. When there are timings, they will be published beside the project that produced them.</p>
+
+            <h3>Errors that tell you the fix</h3>
+            <p>A failure should name what happened, where it happened and the next command to try. An error that only says a file is missing has not finished its job.</p>
+
+            <h3>One default path</h3>
+            <p>Most projects will not need a build script. When they do, the manifest will leave room for one. The default path should be enough to start, not a cage.</p>
+          </section>
+
+          <section aria-labelledby="principles-title">
+            <h2 id="principles-title">Principles</h2>
+            <ol>
+              <li><strong>One tool.</strong> One manifest, one lockfile, one command set. Fewer moving parts in the first five minutes.</li>
+              <li><strong>Smooth beats complete.</strong> A smaller workflow that works end to end beats a larger one that is nearly done.</li>
+              <li><strong>Errors say what to do next.</strong> Every message names a cause and a next step. Silence is a bug.</li>
+              <li><strong>Reuse the ecosystem and offer an exit.</strong> Maven Central stays. Maven and Gradle stay reachable. Export is part of the design, not a rescue plan.</li>
+              <li><strong>Fast by default.</strong> No JVM starts unless it is needed. Speed is measured before it is claimed.</li>
+              <li><strong>Never silent about risk.</strong> Conflicts, changed checksums and unsupported POM features stay visible.</li>
+            </ol>
+          </section>
+
+          <section aria-labelledby="tests-title">
+            <h2 id="tests-title">The smoothness tests</h2>
+            <p>These are the tests the design will be judged by. They are written now so the project cannot move the goal after the fact.</p>
+            <ul class="checklist">
+              <li>A new user completes the hello flow with no Java installed. <span class="meta">Not yet testable</span></li>
+              <li>The same three commands work for a plain app, a Spring Boot app and a Quarkus app. <span class="meta">Not yet testable</span></li>
+              <li>A warm run after a one-line change takes seconds, not minutes. <span class="meta">Not yet testable</span></li>
+              <li>Every common error suggests a next step. <span class="meta">Not yet testable</span></li>
+              <li>A project can leave through export without lock-in. <span class="meta">Not yet testable</span></li>
+            </ul>
+          </section>
+
+          <section aria-labelledby="limits-title">
+            <h2 id="limits-title">What jx will not match</h2>
+            <p>Saying what a tool will not do is part of the design. These limits are deliberate.</p>
+
+            <h3>Plugin ecosystems</h3>
+            <p>Maven's plugin ecosystem is broad and old. jx will not match it in V1. Delegate mode calls Maven or Gradle, and a plugin host is planned for later.</p>
+
+            <h3>Versioning without SemVer</h3>
+            <p>Java dependencies do not follow SemVer. jx will use compatibility ranges and a conflict policy. It cannot make version numbers mean something they do not.</p>
+
+            <h3>Maturity</h3>
+            <p>Cargo and uv have years of use and many edge cases behind them. jx starts at zero. The comparison is about shape, not experience.</p>
+          </section>
+
+          <section aria-labelledby="scope-title">
+            <h2 id="scope-title">The scope rule</h2>
+            <p class="pullquote">Protect the five-minute happy path first. Widen coverage second.</p>
+            <p>A feature that does not help a new project reach a running program waits. That rule is easier to state than to keep. It is written here so the project can be held to it.</p>
+            <p>Read <a href="roadmap.html">the roadmap</a> for the milestones, or start with the <a href="docs/quickstart.html">target quickstart</a>.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="vision.html">Vision</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

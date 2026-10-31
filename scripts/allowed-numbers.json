@@ -1,0 +1,9 @@
+{
+  "allowed": [
+    "5 minutes",
+    "5-minute",
+    "five minutes",
+    "five-minute"
+  ],
+  "note": "The five-minute target is the only performance number the site may state. Add a number only with its source and owner approval."
+}

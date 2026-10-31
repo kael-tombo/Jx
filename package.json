@@ -1,0 +1,32 @@
+{
+  "name": "jx-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The design-preview website for jx. Hand-written HTML, CSS and modules; no runtime dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node tests/server.mjs",
+    "check": "npm run check:claims && npm run check:todos && npm run check:contrast && npm run check:shared && npm run check:links && npm run check:html",
+    "check:claims": "node scripts/check-claims.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:html": "html-validate \"public/**/*.html\"",
+    "check:links": "node scripts/check-links.mjs",
+    "check:shared": "node scripts/check-shared.mjs",
+    "check:todos": "node scripts/check-todos.mjs",
+    "check:production": "npm run check && node scripts/check-todos.mjs --production",
+    "spellcheck": "cspell --no-progress \"public/**/*.html\"",
+    "test": "playwright test",
+    "lighthouse": "lhci autorun",
+    "og": "node scripts/make-og.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@lhci/cli": "0.15.1",
+    "@playwright/test": "1.64.1",
+    "cspell": "10.4.0",
+    "html-validate": "11.17.0"
+  }
+}

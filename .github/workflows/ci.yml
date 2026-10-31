@@ -37,3 +37,30 @@ jobs:
 
   # The brief asks CI to track binary size and startup time once there is a
   # binary worth measuring; added when M1 lands a real command budget.
+
+  site:
+    name: site (checks, axe, Lighthouse mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install site tooling
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Content, contrast, markup and links
+        run: npm run check
+      - name: Spellcheck
+        run: npm run spellcheck
+      - name: Playwright and axe (light and dark)
+        run: npm test
+      - name: Resolve the browser for Lighthouse
+        run: echo "CHROME_PATH=$(node tests/chrome-path.mjs)" >> "$GITHUB_ENV"
+      - name: Lighthouse mobile budgets
+        run: npm run lighthouse

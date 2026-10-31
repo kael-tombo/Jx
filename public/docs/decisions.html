@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design decisions | jx</title>
+  <meta name="description" content="Index of architecture decision records for jx: language, layout, resolver and JDK source.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/docs/decisions.html}}">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/print.css" media="print">
+  <script src="../js/theme-init.js"></script>
+  <script type="module" src="../js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="../index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="quickstart.html" aria-current="page">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="draft">
+    <div class="wrap doc-layout">
+      <aside class="docs-sidebar">
+        <nav class="docs-nav" aria-label="Docs">
+          <p class="docs-nav-title">Docs</p>
+          <ul>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="concepts.html">Concepts</a></li>
+            <li><a href="commands.html">Commands</a></li>
+            <li><a href="maven-gradle.html">Maven and Gradle</a></li>
+            <li><a href="decisions.html" aria-current="page">Design decisions</a></li>
+            <li><a href="contributing.html">Contributing</a></li>
+            <li><a href="glossary.html">Glossary</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <article class="doc-main prose">
+        <header class="doc-head">
+          <span class="badge" data-status="draft">Draft</span>
+          <h1>Design decisions</h1>
+          <p>An index of the architecture decision records behind jx and this site.</p>
+        </header>
+
+        <p class="note">This page is an index, not a copy. Records live in the repository and can be superseded.</p>
+
+        <h2 id="records">Records</h2>
+        <section class="table-wrap" aria-labelledby="records-caption" tabindex="0">
+          <table>
+            <caption id="records-caption">Accepted records in the repository, newest last.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Record</th>
+                <th scope="col">Decision</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0001-shared-jx-common-crate.md">0001</a></th>
+                <td>Rust, and a shared core crate for errors, configuration, paths and cache.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0002-temurin-provider.md">0002</a></th>
+                <td>Eclipse Temurin as the proposed default JDK source.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0003-repository-client-and-pom-model.md">0003</a></th>
+                <td>Maven Central client, POM model, version ordering and Maven standard layout.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0004-lockfile-and-resolution-policy.md">0004</a></th>
+                <td>Lockfile format, native resolver, version selection and conflict policy.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0005-packaging-layout.md">0005</a></th>
+                <td>Packaging layout and the manifest for a runnable jar.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0006-fat-jar-merge-rules.md">0006</a></th>
+                <td>Fat jar merge rules for duplicate entries and signature files.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0007-maven-export.md">0007</a></th>
+                <td>Maven POM export from the lockfile, with its known approximation.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0009-runtime-images.md">0009</a></th>
+                <td>Runtime images built with jdeps and jlink, verified before use.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0100-site-design-system.md">0100</a></th>
+                <td>Warm-paper reference-manual design, type scale and contrast pairs for this site.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0101-site-truth-and-status.md">0101</a></th>
+                <td>How the site handles status, placeholders and claims about a tool that is not released.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0102-site-fonts-and-assets.md">0102</a></th>
+                <td>Self-hosted fonts under the Open Font License, and offline assets.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <h2 id="reading">How to read a record</h2>
+        <p>Each record states the forces in play, the decision, the options considered and the consequences. A record is dated, so it can be read in the order it was written.</p>
+        <p>The template lives beside the records in the repository. A new decision starts as a proposal and becomes accepted only after review.</p>
+
+        <h2 id="site">Why the site has records</h2>
+        <p>The website is a design artifact too. Its type scale, truth rules and fonts are recorded so a later change can argue with a decision instead of guessing at one. The three site records use numbers from 0100 so they stay clear of the tool's own ADR sequence.</p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="../index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../privacy.html">Privacy</a>
+        <a href="../accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glossary | jx</title>
+  <meta name="description" content="Terms used in the jx design documents.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/docs/glossary.html}}">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/print.css" media="print">
+  <script src="../js/theme-init.js"></script>
+  <script type="module" src="../js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="../index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="quickstart.html" aria-current="page">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="draft">
+    <div class="wrap doc-layout">
+      <aside class="docs-sidebar">
+        <nav class="docs-nav" aria-label="Docs">
+          <p class="docs-nav-title">Docs</p>
+          <ul>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="concepts.html">Concepts</a></li>
+            <li><a href="commands.html">Commands</a></li>
+            <li><a href="maven-gradle.html">Maven and Gradle</a></li>
+            <li><a href="decisions.html">Design decisions</a></li>
+            <li><a href="contributing.html">Contributing</a></li>
+            <li><a href="glossary.html" aria-current="page">Glossary</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <article class="doc-main prose">
+        <header class="doc-head">
+          <span class="badge" data-status="draft">Draft</span>
+          <h1>Glossary</h1>
+          <p>Terms used in the jx design documents, in plain language.</p>
+        </header>
+
+        <p class="note">Definitions describe the proposed design. They do not claim that any term is implemented.</p>
+
+        <dl class="glossary">
+          <div>
+            <dt id="glossary-adapter">Adapter</dt>
+            <dd>A planned component that connects <code>jx run</code> to a framework such as Spring Boot, Quarkus, Vert.x or Jakarta EE. Adapters are after V1.</dd>
+          </div>
+          <div>
+            <dt id="glossary-adr">ADR</dt>
+            <dd>Architecture decision record. A short, dated note that records a choice and its consequences.</dd>
+          </div>
+          <div>
+            <dt id="glossary-compatibility-mode">Compatibility mode</dt>
+            <dd>A planned mode where jx uses an existing Maven or Gradle build while supplying its own toolchain and commands.</dd>
+          </div>
+          <div>
+            <dt id="glossary-conflict-policy">Conflict policy</dt>
+            <dd>The rule used when two dependencies ask for different versions. Proposed: highest compatible version within a major; a hard error across majors.</dd>
+          </div>
+          <div>
+            <dt id="glossary-delegate-mode">Delegate mode</dt>
+            <dd>A planned mode where jx calls Maven or Gradle to perform a build.</dd>
+          </div>
+          <div>
+            <dt id="glossary-design-preview">Design preview</dt>
+            <dd>This website. It describes a proposal and is not a release of the tool.</dd>
+          </div>
+          <div>
+            <dt id="glossary-jdk">JDK</dt>
+            <dd>Java Development Kit. The compiler and runtime tools a Java project needs.</dd>
+          </div>
+          <div>
+            <dt id="glossary-lockfile">Lockfile</dt>
+            <dd>A file written by the resolver that records exact artifacts and checksums for a reproducible build.</dd>
+          </div>
+          <div>
+            <dt id="glossary-manifest">Manifest</dt>
+            <dd>The single project file, <code>project.toml</code>, which records the project name, JDK pin, dependencies and entry point.</dd>
+          </div>
+          <div>
+            <dt id="glossary-maven-central">Maven Central</dt>
+            <dd>The public repository where Java libraries are published. jx plans to reuse it, not replace it.</dd>
+          </div>
+          <div>
+            <dt id="glossary-maven-layout">Maven standard layout</dt>
+            <dd>The directory convention with main sources under <code>src/main/java</code> and tests under <code>src/test/java</code>.</dd>
+          </div>
+          <div>
+            <dt id="glossary-milestone">Milestone</dt>
+            <dd>A named stage of the plan, M0 to M8, with a decision gate before it closes.</dd>
+          </div>
+          <div>
+            <dt id="glossary-pom">POM</dt>
+            <dd>Maven's project object model. jx would read POM metadata to resolve dependencies.</dd>
+          </div>
+          <div>
+            <dt id="glossary-resolver">Resolver</dt>
+            <dd>The component that reads dependency metadata, selects versions and writes the lockfile.</dd>
+          </div>
+          <div>
+            <dt id="glossary-status">Status</dt>
+            <dd>A word on this site that says how settled a claim is: idea, draft, proposed, accepted, implemented or shipped. The last two are not used until a release exists.</dd>
+          </div>
+          <div>
+            <dt id="glossary-toolchain">Toolchain</dt>
+            <dd>The JDK installation jx manages and pins for a project.</dd>
+          </div>
+          <div>
+            <dt id="glossary-v1">V1</dt>
+            <dd>The first planned release. Its scope is Java only, with the Maven standard layout.</dd>
+          </div>
+          <div>
+            <dt id="glossary-vision">Vision</dt>
+            <dd>The long-form statement of why jx exists, what smooth means, and what the project will not match.</dd>
+          </div>
+        </dl>
+
+        <h2 id="more">More</h2>
+        <p>Read the <a href="concepts.html">concepts</a> for the three central terms, or the <a href="../vision.html">vision</a> for the arguments behind them.</p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="../index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../privacy.html">Privacy</a>
+        <a href="../accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

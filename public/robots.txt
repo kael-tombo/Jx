@@ -1,0 +1,4 @@
+# Design preview. Indexing is off until site.config.json says indexable true
+# and the meta robots tags are flipped at launch.
+User-agent: *
+Disallow: /

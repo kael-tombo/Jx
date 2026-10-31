@@ -1,0 +1,155 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 1200px;
+  height: 630px;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.og {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 28px;
+  width: 100%;
+  height: 100%;
+  padding: 48px 64px 36px;
+}
+
+.og-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.og-wordmark {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+.og-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  border: 1px solid var(--control-line);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.og-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.og-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  align-items: center;
+  gap: 56px;
+  padding-block: 12px;
+}
+
+.og-heading {
+  max-width: 11ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 88px;
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+
+.og-sub {
+  max-width: 30ch;
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1.45;
+}
+
+.og-ledger {
+  display: flex;
+  gap: 36px;
+  margin-block-start: 30px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--line);
+}
+
+.og-ledger span {
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.og-ledger strong {
+  display: block;
+  margin-block-start: 3px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.og-panel {
+  padding: 24px;
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  color: var(--terminal-ink);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.og-label {
+  display: block;
+  margin-block-end: 14px;
+  padding-block-end: 12px;
+  border-block-end: 1px solid var(--terminal-line);
+  color: var(--terminal-muted);
+  font-size: 11px;
+}
+
+.og-panel p {
+  margin: 0;
+  font-size: inherit;
+}
+
+.og-prompt {
+  color: var(--terminal-accent);
+}
+
+.og-output {
+  margin-block-start: 12px !important;
+  color: var(--terminal-ink);
+}
+
+.og-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

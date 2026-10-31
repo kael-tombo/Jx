@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accessibility | jx</title>
+  <meta name="description" content="How this site aims to meet WCAG 2.2 AA, what has been checked, and how to report a barrier.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/accessibility.html}}">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+  <script src="js/theme-init.js"></script>
+  <script type="module" src="js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="vision.html">Vision</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="docs/quickstart.html">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="draft">
+    <div class="page">
+      <div class="wrap">
+        <header class="page-head">
+          <span class="badge" data-status="draft">Draft</span>
+          <h1>Accessibility.</h1>
+          <p class="lede">How this site aims to meet WCAG 2.2 AA, what has been checked, and what remains limited.</p>
+        </header>
+
+        <div class="prose">
+          <section aria-labelledby="target-title">
+            <h2 id="target-title">Target</h2>
+            <p>This site aims at WCAG 2.2 level AA. The aim covers the whole site: the landing page, the vision and roadmap, the draft documentation, and the plain pages.</p>
+          </section>
+
+          <section aria-labelledby="built-title">
+            <h2 id="built-title">What is built in</h2>
+            <ul>
+              <li>Semantic HTML with landmarks, one main heading per page and a logical heading order.</li>
+              <li>A skip link, visible focus styles and full keyboard use.</li>
+              <li>Text alternatives for the architecture diagram and the terminal transcript.</li>
+              <li>Status is written in words, never carried by colour alone.</li>
+              <li>Light and dark themes that follow the system preference, with a manual toggle.</li>
+              <li>Motion is limited. The terminal typing effect is off when reduced motion is requested, and it has pause and show-all controls.</li>
+              <li>Pages remain readable and navigable with JavaScript off.</li>
+              <li>Layouts work at narrow widths and at zoom.</li>
+            </ul>
+          </section>
+
+          <section aria-labelledby="checked-title">
+            <h2 id="checked-title">What has been checked</h2>
+            <p>These checks ran against the built pages:</p>
+            <ul>
+              <li>axe with the WCAG 2.0, 2.1 and 2.2 A and AA rule sets found no serious or critical issue on any page, in light or dark.</li>
+              <li>Lighthouse reported no accessibility failure on the pages tested.</li>
+              <li>Every text colour pair meets the AA contrast minimum, and control borders meet the UI minimum, in both themes.</li>
+              <li>The browser tests cover the skip link, keyboard focus, the theme toggle, native FAQ controls, the copy announcement, reading with JavaScript off, and reflow at a narrow width.</li>
+            </ul>
+            <p class="note">An independent audit by a disabled user has not happened yet. Until it does, this page does not claim one.</p>
+          </section>
+
+          <section aria-labelledby="limits-title">
+            <h2 id="limits-title">Known limitations</h2>
+            <ul>
+              <li>Wide tables scroll horizontally on small screens. The scroll region can be reached and scrolled with a keyboard.</li>
+              <li>The terminal typing effect is decorative. The full transcript is always present for assistive technology.</li>
+              <li>Some values on this site are placeholders. They are marked as such and are not presented as final content.</li>
+            </ul>
+          </section>
+
+          <section aria-labelledby="feedback-title">
+            <h2 id="feedback-title">Report a barrier</h2>
+            <p>If something here blocks you, the project wants to know. Contact: <span class="todo">{{TODO: accessibility contact}}</span>. Include the page and what you were trying to do. No personal details beyond what you choose to share.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="vision.html">Vision</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

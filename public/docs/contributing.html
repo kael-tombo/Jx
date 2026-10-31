@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contributing | jx</title>
+  <meta name="description" content="How to follow, discuss and help with the jx design.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/docs/contributing.html}}">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/print.css" media="print">
+  <script src="../js/theme-init.js"></script>
+  <script type="module" src="../js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="../index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="quickstart.html" aria-current="page">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="draft">
+    <div class="wrap doc-layout">
+      <aside class="docs-sidebar">
+        <nav class="docs-nav" aria-label="Docs">
+          <p class="docs-nav-title">Docs</p>
+          <ul>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="concepts.html">Concepts</a></li>
+            <li><a href="commands.html">Commands</a></li>
+            <li><a href="maven-gradle.html">Maven and Gradle</a></li>
+            <li><a href="decisions.html">Design decisions</a></li>
+            <li><a href="contributing.html" aria-current="page">Contributing</a></li>
+            <li><a href="glossary.html">Glossary</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <article class="doc-main prose">
+        <header class="doc-head">
+          <span class="badge" data-status="draft">Draft</span>
+          <h1>Contributing</h1>
+          <p>How to follow, question and help with the design while it is still open.</p>
+        </header>
+
+        <p class="note">There is no published contribution process yet. This page describes what help is useful now, not a process that exists.</p>
+
+        <h2 id="follow">Follow</h2>
+        <p>The repository is public. Watch it on <a href="https://github.com/kael-tombo/Jx">GitHub</a> for changes to the design notes and the <a href="../roadmap.html">roadmap</a>. No release is scheduled.</p>
+
+        <h2 id="discuss">Discuss</h2>
+        <p>The most useful contribution now is a sharp question. If a decision record assumes something that is not true for your project, say so and name the case. A counterexample is worth more than a preference.</p>
+        <p>Use the repository's issue tracker if it is open. Otherwise, read the <a href="decisions.html">decision records</a> and respond with the case the record missed.</p>
+
+        <h2 id="help">Where help is useful</h2>
+        <ul>
+          <li>Counterexamples from real Maven and Gradle projects, especially unusual layouts and plugin-dependent builds.</li>
+          <li>Reviews of the <a href="../vision.html">smoothness tests</a>: are they the right tests for a first release?</li>
+          <li>Accessibility feedback on this site. The <a href="../accessibility.html">accessibility page</a> says what has and has not been checked.</li>
+          <li>Honest limits. If the vision page is too generous about what jx will not match, say where.</li>
+        </ul>
+
+        <h2 id="rules">Rules and conduct</h2>
+        <p>A contribution guide and a code of conduct are not published yet. <span class="todo">{{TODO: contribution guide and code of conduct}}</span></p>
+        <p>Until they exist, keep discussion specific, cite the case you are arguing from, and assume the other person is trying to make the tool smaller and more honest.</p>
+
+        <h2 id="code">Code</h2>
+        <p>The project will publish a build and test guide before it asks anyone to run either. This site does not describe behaviour as if it were implemented.</p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="../index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="../vision.html">Vision</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../privacy.html">Privacy</a>
+        <a href="../accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

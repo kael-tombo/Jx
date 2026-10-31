@@ -1,0 +1,48 @@
+{
+  "version": "0.2",
+  "language": "en-GB",
+  "words": [
+    "Amper",
+    "daemonless",
+    "Gradle",
+    "gradlew",
+    "JBang",
+    "javac",
+    "jdeps",
+    "JDK",
+    "JDKs",
+    "jlink",
+    "jot",
+    "JUnit",
+    "jx",
+    "lockfile",
+    "lockfiles",
+    "Maven",
+    "Micronaut",
+    "mvnw",
+    "noindex",
+    "OFL",
+    "POM",
+    "POMs",
+    "Quarkus",
+    "quickstart",
+    "reflow",
+    "rustup",
+    "Temurin",
+    "toolchain",
+    "toolchains",
+    "Vert",
+    "WCAG"
+  ],
+  "ignoreRegExpList": [
+    "/\\{\\{TODO[^}]*\\}\\}/g",
+    "/https?:\\/\\/[^\\s\"'<>]+/g"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    ".lighthouseci/**",
+    ".freebuff/**",
+    "docs/screenshots/**",
+    "public/assets/**"
+  ]
+}

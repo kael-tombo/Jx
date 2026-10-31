@@ -1,0 +1,248 @@
+/* Print: a clean reading copy, no navigation or controls. */
+
+@page {
+  size: A4;
+  margin: 16mm;
+}
+
+@media print {
+  :root {
+    --paper: #ffffff;
+    --ink: #000000;
+    --muted: #333333;
+    --line: #cccccc;
+    --control-line: #666666;
+    --code-bg: #ffffff;
+    --accent: #000000;
+    --on-accent: #ffffff;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  .wrap {
+    width: auto;
+    margin: 0;
+  }
+
+  .site-header {
+    position: static;
+    border-block-end: 1pt solid #000000;
+    padding-block-end: 0.5rem;
+  }
+
+  .site-nav,
+  .theme-toggle,
+  .skip-link,
+  .terminal-actions,
+  .terminal-control,
+  .hero-actions,
+  .button-row,
+  .copy-button,
+  .copy-status,
+  .footer-nav,
+  .docs-sidebar,
+  .follow-actions {
+    display: none !important;
+  }
+
+  .hero {
+    padding-block: 0 1rem;
+  }
+
+  .hero-grid {
+    display: block;
+  }
+
+  .hero-title {
+    max-width: none;
+    font-size: 32pt;
+  }
+
+  .hero-sub,
+  .lede,
+  .section-intro {
+    max-width: none;
+    color: #000000;
+  }
+
+  .hero-terminal {
+    max-width: 100%;
+    padding-block-start: 1rem;
+  }
+
+  .status-strip {
+    border-color: #999999;
+  }
+
+  .status-strip > div {
+    border-color: #999999;
+  }
+
+  .section {
+    padding-block: 1.1rem;
+    border-block-start: 1pt solid #cccccc;
+  }
+
+  .section-grid {
+    display: block;
+  }
+
+  .section-head h2 {
+    max-width: none;
+    margin-block-end: 0.5rem;
+  }
+
+  .terminal {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1pt solid #000000;
+  }
+
+  .terminal-bar {
+    border-block-end: 1pt solid #000000;
+  }
+
+  .terminal-label,
+  .terminal pre,
+  .terminal-prompt,
+  .terminal-output {
+    color: #000000 !important;
+  }
+
+  .terminal figcaption {
+    color: #333333;
+  }
+
+  .diagram-wide {
+    display: block !important;
+  }
+
+  .diagram-narrow {
+    display: none !important;
+  }
+
+  .diagram .node,
+  .diagram .node--reused,
+  .diagram .node--later {
+    fill: #ffffff;
+    stroke: #000000;
+  }
+
+  .diagram .node-title,
+  .diagram .node-detail,
+  .diagram .reused-label,
+  .diagram .later-label,
+  .diagram .flow,
+  .diagram .arrow {
+    fill: #000000;
+    stroke: #000000;
+  }
+
+  .swatch {
+    border-color: #000000;
+    background: #ffffff;
+  }
+
+  .badge {
+    border: 0.5pt solid #000000;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .badge::before {
+    background: #000000;
+  }
+
+  .roadmap-strip {
+    grid-template-columns: repeat(3, 1fr);
+    border-block-start: 1pt solid #000000;
+  }
+
+  .roadmap-strip li {
+    border-color: #999999;
+  }
+
+  .milestone-state::before {
+    background: #000000;
+  }
+
+  details {
+    break-inside: avoid;
+    border-color: #999999;
+  }
+
+  details > summary ~ * {
+    display: block !important;
+  }
+
+  a {
+    color: #000000;
+    text-decoration: underline;
+  }
+
+  :not(pre) > code {
+    background: none;
+    padding: 0;
+  }
+
+  .note,
+  .pullquote,
+  .todo {
+    border-color: #000000;
+    color: #000000;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border-color: #999999;
+  }
+
+  .table-wrap table {
+    min-width: 0;
+    font-size: 9pt;
+  }
+
+  thead th,
+  tbody th,
+  tbody td {
+    border-color: #999999;
+  }
+
+  .table--compare th:last-child,
+  .table--compare td:last-child {
+    background: transparent;
+  }
+
+  figure,
+  table,
+  .property,
+  .timeline > li,
+  .gates > li,
+  .checklist > li {
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .site-footer {
+    margin-block-start: 1rem;
+    padding-block-start: 0.5rem;
+    border-block-start: 1pt solid #cccccc;
+    color: #333333;
+    font-size: 8.5pt;
+  }
+}

@@ -1,8 +1,8 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M6 done: build, run, test, packaging, Maven
-> export and runtime images).** This README describes the intent of the
-> project, not yet its shipped abilities; see
+> **Status: under construction (M7 in progress: build, run, test, packaging,
+> Maven export, runtime images and Maven import).** This README describes the
+> intent of the project, not yet its shipped abilities; see
 > [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
@@ -56,6 +56,10 @@ jx image             # target/dist/runtime: trimmed jlink runtime
 jx image --full      # all JDK modules when reflection needs them
 jx export maven --group-id com.example  # write a POM from the lockfile
 
+# Coming from Maven
+jx import            # convert ./pom.xml into ./project.toml
+jx import service/pom.xml --dry-run  # print the manifest and notes only
+
 # Tests
 jx add --dev org.junit.platform:junit-platform-console-standalone
 jx test              # compile src/test/java and run JUnit 5
@@ -78,11 +82,38 @@ platform BOMs are inlined and an existing `pom.xml` is not overwritten unless
 `--force` is passed (ADR 0007). `jx image` asks `jdeps` which modules the app
 needs, builds a verified `jlink` runtime under `target/dist/runtime`, and
 falls back to a full runtime when analysis cannot trim; use `--full` when
-reflection loads modules at runtime (ADR 0009).
+reflection loads modules at runtime (ADR 0009). `jx import` reads the
+project's effective POM (parents, properties and imported BOMs included),
+writes `project.toml` with exact direct-dependency pins and prints every
+approximation it made; it refuses to overwrite an existing manifest without
+`--force` (ADR 0010).
 
-Not yet usable (they report their milestone): import (M7), annotation
-processors (deferred from M4), and a separate `update` command (`jx lock`
-re-resolves wanted prefixes today).
+Not yet usable (they report their milestone): Gradle import/export (M7),
+Maven/Gradle compatibility and delegated builds (M7), annotation processors
+(deferred from M4), and a separate `update` command (`jx lock` re-resolves
+wanted prefixes today).
+
+## Design preview website
+
+The public design preview lives in `public/`: hand-written HTML, CSS and ES
+modules, no framework and no build step. It describes the plan; it never claims
+a release. Open `public/index.html` directly or serve the folder:
+
+```sh
+npm install                # dev tooling only; the site has no runtime deps
+npm start                  # http://127.0.0.1:4173
+npm run check              # claims, TODOs, contrast, shared markup, links, HTML
+npm test                   # Playwright and axe, both themes
+npm run spellcheck
+npm run lighthouse         # mobile, port 4174
+```
+
+`npm run check:production` fails until every `{{TODO}}` is resolved. The owner
+inputs and launch gates are listed in [docs/LAUNCH.md](docs/LAUNCH.md); design
+and truth decisions are in [docs/decisions/0100-site-design-system.md](docs/decisions/0100-site-design-system.md),
+[0101](docs/decisions/0101-site-truth-and-status.md) and
+[0102](docs/decisions/0102-site-fonts-and-assets.md). Current measured results
+are in [docs/QUALITY.md](docs/QUALITY.md).
 
 ## Repository
 
@@ -91,7 +122,10 @@ re-resolves wanted prefixes today).
 * [docs/exit-codes.md](docs/exit-codes.md) — the exit-code contract
 * [docs/decisions/0007-maven-export.md](docs/decisions/0007-maven-export.md) — what `jx export maven` reproduces
 * [docs/decisions/0009-runtime-images.md](docs/decisions/0009-runtime-images.md) — jdeps/jlink image decisions
+* [docs/decisions/0010-maven-import.md](docs/decisions/0010-maven-import.md) — what `jx import` converts
 * [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — what does not work yet
+* [docs/LAUNCH.md](docs/LAUNCH.md) — website launch gates and owner inputs
+* [docs/QUALITY.md](docs/QUALITY.md) — measured site quality record
 
 ## Licence
 

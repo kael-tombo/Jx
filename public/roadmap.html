@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roadmap | jx</title>
+  <meta name="description" content="Milestones M0 to M8, decision gates and current status for the jx V1 plan. Estimates only; nothing is released.">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="{{TODO: https://domain/roadmap.html}}">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+  <script src="js/theme-init.js"></script>
+  <script type="module" src="js/theme.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="index.html">jx</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="vision.html">Vision</a>
+        <a href="roadmap.html" aria-current="page">Roadmap</a>
+        <a href="docs/quickstart.html">Docs</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" data-status="proposed">
+    <div class="page">
+      <div class="wrap">
+        <header class="page-head">
+          <span class="badge" data-status="proposed">Proposed plan</span>
+          <h1>Roadmap.</h1>
+          <p class="lede">Milestones M0 to M8, the gates between them, and the honest status of the V1 plan. Nothing is released.</p>
+        </header>
+
+        <div class="prose">
+          <p class="note">Estimates assume a small team and will change. No dates are set. No milestone is released.</p>
+
+          <section aria-labelledby="milestones-title">
+            <h2 id="milestones-title">Milestones</h2>
+            <ol class="timeline">
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M0</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Foundations</h3>
+                <p>Workspace, continuous integration, decision records, configuration and diagnostics. The base every later milestone sits on.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M1</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Toolchain and hello</h3>
+                <p>JDK download and pin, project scaffolding, and a first build and run with no Java installed.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M2</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Repository and POM model</h3>
+                <p>Maven Central client, cache, checksums, a POM model and dependency version ordering.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M3</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Resolver</h3>
+                <p>Dependency graph, conflict policy, a reproducible lockfile, and the tree and why commands.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M4</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Build and test</h3>
+                <p>javac integration, fingerprints that skip unchanged work, resources, and a JUnit launcher.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M5</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Run and package</h3>
+                <p>Main discovery, a run command, distributions and a jar. Export to Maven.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M6</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Runtime trimming</h3>
+                <p>jdeps and jlink, with a fallback when a project cannot be trimmed.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M7</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Maven and Gradle interop</h3>
+                <p>Import, compatibility mode, delegate mode, and exports in both directions.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta"><span>M8</span><span class="badge" data-status="proposed">Not released</span></p>
+                <h3>Release hardening</h3>
+                <p>Documentation, an install path, a security review and a launch checklist.</p>
+              </li>
+            </ol>
+          </section>
+
+          <section aria-labelledby="gates-title">
+            <h2 id="gates-title">Decision gates</h2>
+            <p>A milestone cannot close because code exists. It closes when its gate passes.</p>
+            <ul class="gates">
+              <li data-status="proposed">
+                <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
+                <h3>Resolver parity with Maven</h3>
+                <p>A representative set of POMs resolves to the same versions Maven selects. Until this holds, the resolver is not done.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
+                <h3>Happy-path coverage</h3>
+                <p>A new user completes the hello flow on a machine with no Java installed, following only the published quickstart.</p>
+              </li>
+              <li data-status="proposed">
+                <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
+                <h3>User preference</h3>
+                <p>People choose jx for a new project after trying it beside their current workflow. No such trial has run.</p>
+              </li>
+            </ul>
+          </section>
+
+          <section aria-labelledby="reading-title">
+            <h2 id="reading-title">How to read this page</h2>
+            <p>Statuses describe the public plan, not private progress. A milestone marked not released has no public release. Estimates will change, and the page will say when they do.</p>
+            <p>The landing page carries a short version of this timeline. The <a href="vision.html">vision</a> explains the tests behind the gates.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <a class="footer-wordmark" href="index.html">jx</a>
+        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="vision.html">Vision</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
+      </nav>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+    </div>
+  </footer>
+</body>
+</html>

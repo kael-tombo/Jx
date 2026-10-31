@@ -1,0 +1,10 @@
+{
+  "name": "jx",
+  "tagline": "The missing front door to Java",
+  "domain": null,
+  "repoUrl": "https://github.com/kael-tombo/Jx",
+  "signupEndpoint": null,
+  "owner": null,
+  "licence": "Apache-2.0 OR MIT",
+  "indexable": false
+}

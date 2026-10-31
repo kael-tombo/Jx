@@ -85,3 +85,9 @@ engine = "maven"
   (or `<name>-<version>-all.jar` with `--fat`); `[run] main`, when present,
   becomes the jar's `Main-Class`. Without a pin, jx discovers a single main
   class and refuses to guess between several.
+* `jx import` (Maven) writes direct dependencies as exact (`=version`) pins
+  using the versions the effective POM resolved, puts test-scope dependencies
+  in `[dev-dependencies]`, and does not write platform entries for imported
+  BOMs (their effect is already in the pins). It does not migrate exclusions,
+  system-scope dependencies, plugin configuration or POM repositories; see
+  [decisions/0010-maven-import.md](decisions/0010-maven-import.md).

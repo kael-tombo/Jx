@@ -242,6 +242,41 @@ fn parent_supplies_group_and_managed_versions() {
 }
 
 #[test]
+fn local_pom_with_unrelated_relative_parent_falls_back_to_the_repository() {
+    let t = harness(vec![pom("ut/p/1.0/p-1.0.pom", PARENT_A)]);
+    let root = tempfile::tempdir().expect("project dir");
+    let app = root.path().join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(
+        root.path().join("pom.xml"),
+        "<project><groupId>other</groupId><artifactId>unrelated</artifactId><version>9</version></project>",
+    )
+    .unwrap();
+    std::fs::write(
+        app.join("pom.xml"),
+        r#"<project>
+  <parent><groupId>ut</groupId><artifactId>p</artifactId><version>1.0</version></parent>
+  <artifactId>local-app</artifactId>
+</project>"#,
+    )
+    .unwrap();
+
+    let effective = PomLoader::new(&t.client)
+        .load_file(&app.join("pom.xml"))
+        .expect("remote parent after local mismatch");
+    assert_eq!(effective.coords.group_id, "ut");
+    assert_eq!(effective.coords.artifact_id, "local-app");
+    assert_eq!(effective.coords.version, "1.0");
+    assert_eq!(
+        effective
+            .managed("ut", "lib")
+            .and_then(|dependency| dependency.version.as_deref()),
+        Some("2.3.1"),
+        "the remote parent's management table was merged"
+    );
+}
+
+#[test]
 fn parent_project_version_resolves_to_the_child() {
     let t = harness(vec![
         pom("ut/p2/1.0/p2-1.0.pom", PARENT_B),

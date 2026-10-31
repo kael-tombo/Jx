@@ -4,6 +4,7 @@
 mod build;
 mod deps;
 mod doctor;
+mod import;
 mod scaffold;
 
 use std::path::PathBuf;
@@ -40,10 +41,10 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M6 (runtime images). Live: jx jdk <command>, jx new/init, \
+small manifest.\n\nStatus: M7 (interop). Live: jx jdk <command>, jx new/init, \
 jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package/image, \
-jx export maven and jx doctor. Maven/Gradle import and Gradle export are \
-still ahead."
+jx import, jx export maven and jx doctor. Gradle import/export, compatibility \
+mode and delegated builds are still ahead."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -78,8 +79,20 @@ enum Command {
     },
     /// Initialise jx in an existing directory
     Init,
-    /// Convert an existing Maven or Gradle build (planned M7)
-    Import { path: Option<PathBuf> },
+    /// Convert an existing Maven POM into project.toml (Gradle planned)
+    Import {
+        /// Path to pom.xml, or to a directory containing one (default: ./pom.xml)
+        path: Option<PathBuf>,
+        /// Write the manifest here instead of ./project.toml
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+        /// Overwrite an existing project.toml
+        #[arg(long)]
+        force: bool,
+        /// Print the generated manifest instead of writing it
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Add a dependency, then update jx.lock
     Add {
         /// group:artifact[:version] (a missing version picks the latest stable release)
@@ -211,11 +224,13 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         ),
         Command::Jdk(jdk) => run_jdk(cli, jdk).map(|()| ExitCode::SUCCESS),
         Command::Clean => clean_project(),
-        Command::Import { .. } => Err(unimplemented(
-            "import",
-            "M7",
-            "use Maven or Gradle until then",
-        )),
+        Command::Import {
+            path,
+            output,
+            force,
+            dry_run,
+        } => import::maven(cli, path.clone(), output.clone(), *force, *dry_run)
+            .map(|()| ExitCode::SUCCESS),
         Command::Add {
             dependency,
             dev,

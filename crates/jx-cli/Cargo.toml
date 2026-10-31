@@ -20,6 +20,7 @@ jx-toolchain = { workspace = true }
 jx-build = { workspace = true }
 jx-run = { workspace = true }
 jx-package = { workspace = true }
+jx-interop = { workspace = true }
 clap = { workspace = true }
 fs4 = { workspace = true }
 

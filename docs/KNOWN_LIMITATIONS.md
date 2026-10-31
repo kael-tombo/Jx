@@ -3,12 +3,12 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M6 done; annotation processors still deferred from M4)
+## Current (M7 in progress; annotation processors still deferred from M4)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
-`jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
-`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx image`,
-`jx export maven`, `jx clean`. M2 delivered the
+`jx new`, `jx init`, `jx import` (Maven), `jx add`, `jx remove`, `jx lock`,
+`jx fetch`, `jx tree`, `jx why`, `jx build`, `jx test`, `jx run`, `jx package`,
+`jx image`, `jx export maven`, `jx clean`. M2 delivered the
 repository client (fetch with always-on checksum verification, mirrors,
 proxies, auth references, content cache), POM/`maven-metadata.xml` models,
 Maven version ordering and the effective-POM loader. M3 added the resolver,
@@ -18,7 +18,8 @@ javac builds, separate main/test dependency classpaths, test compilation and
 JUnit 5 execution. M5 added thin jars, fat jars, the `target/dist` layout and
 Maven POM export. M6 added `jx image`, which builds a jdeps-trimmed jlink
 runtime beside the app and falls back to a full runtime when analysis cannot
-trim. Maven/Gradle import (M7) is still ahead.
+trim. M7 has started with Maven import; Gradle import/export, compatibility
+mode and delegated builds are still ahead.
 
 ### Manifest
 
@@ -184,6 +185,51 @@ trim. Maven/Gradle import (M7) is still ahead.
   JDK releases, so none is passed. JDK 8 is refused before writing.
 - **`jx package` removes `target/dist/runtime`** because it rebuilds `dist`
   from scratch. Run `jx image` again when the runtime is needed.
+
+### Maven import (M7)
+
+- **`jx import [pom]` converts an effective POM into `project.toml`.** Parent
+  POMs at `<relativePath>` are read from disk; missing parents and imported
+  BOMs are fetched through the checksum-verified repository client. No Maven
+  process or local Maven installation is required.
+- **Profiles are ignored**, exactly as they are during normal resolution
+  (ADR 0003). A dependency that only exists inside an active Maven profile
+  does not appear in the imported manifest.
+- **Only `jar` packaging is accepted.** Aggregator `pom` projects must point
+  `jx import` at an application module; `war`, `ear` and other packagings are
+  refused with an explanation.
+- **Compile, runtime and provided dependencies become `[dependencies]`;
+  test dependencies become `[dev-dependencies]`.** jx has no separate runtime
+  or provided scope: those dependencies join the compile classpath and are
+  also packaged. System-scope dependencies (a local `systemPath`) are skipped
+  with a note because they cannot be resolved from a repository.
+- **Non-jar artifact types are skipped with a note** (test-jar, AAR, native
+  types). `optional` is imported as a normal dependency because jx does not
+  model optionality.
+- **Every imported direct version is exact-pinned (`=version`).** BOM imports
+  are expanded at import time and are not written as platform entries, so the
+  manifest records what Maven selected rather than a BOM chain.
+- **Missing versions, unresolved properties, version ranges and SNAPSHOT
+  dependencies fail the import.** Nothing is written: jx does not guess a
+  replacement. Two classifiers of the same `group:artifact` are refused for
+  the same reason.
+- **Exclusions are not represented.** A Maven exclusion that removed a
+  transitive artifact can be lost, so jx's resolved graph may be larger than
+  Maven's. The import prints how many exclusions it saw.
+- **Test dependencies are imported, but `jx test` still needs the JUnit
+  Platform console standalone.** Most Maven POMs declare Surefire and
+  `junit-jupiter` instead; the import note says to add
+  `org.junit.platform:junit-platform-console-standalone` to
+  `[dev-dependencies]` before running `jx test`.
+- **POM repositories, plugin configuration, resource directories,
+  annotation-processor configuration and Maven's main-class settings are not
+  migrated.** jx only trusts repositories in `config.toml`; a main class is
+  discovered at build time or pinned with `[run] main`.
+- **Import validates the generated text with `jx-manifest` before writing.**
+  It refuses to replace an existing manifest without `--force`; `--dry-run`
+  prints the conversion and notes without touching the filesystem.
+- **Gradle import is not implemented yet.** `jx import` currently names a POM
+  (or a directory containing one) and only understands Maven.
 
 ### Maven export (M5)
 

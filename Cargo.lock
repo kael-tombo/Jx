@@ -480,6 +480,7 @@ dependencies = [
  "fs4",
  "jx-build",
  "jx-common",
+ "jx-interop",
  "jx-lock",
  "jx-manifest",
  "jx-maven",
@@ -505,6 +506,10 @@ dependencies = [
 [[package]]
 name = "jx-interop"
 version = "0.1.0"
+dependencies = [
+ "jx-common",
+ "jx-maven",
+]
 
 [[package]]
 name = "jx-lock"

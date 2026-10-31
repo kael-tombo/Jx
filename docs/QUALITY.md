@@ -17,6 +17,7 @@ design preview, so the SEO result is deliberately below target until launch.
 | Shared header and footer | Pass | `check-shared`: 13 pages identical after path and current-page normalisation |
 | HTML, links and spelling | Pass | Validator 13 pages; link check 13 pages and 4 stylesheets; cspell 13 files |
 | Production gate | Blocked, as intended | 21 `{{TODO}}` placeholders remain in `public/` |
+| GitHub Pages preview | Deployed and checked | https://kael-tombo.github.io/Jx/ |
 
 ## Performance and size
 
@@ -43,6 +44,19 @@ The SEO score is 58, not 100, because two weighted audits fail by design:
 `canonical` (the final domain is unknown). The other SEO audits pass. Filling
 `docs/LAUNCH.md` and flipping indexing is the launch gate; the expected result is
 95 or higher.
+
+## Deployment
+
+The GitHub Pages preview is at https://kael-tombo.github.io/Jx/, deployed by
+`.github/workflows/pages.yml` from the committed `public/` folder. The Pages run
+succeeded on 2026-11-01. A live browser pass loaded all 13 pages with one H1,
+loaded fonts, no console errors and no failed assets; the custom 404 returned
+404 and loaded its stylesheet. The root, CSS, JavaScript and font responses were
+200 with the expected content types.
+
+GitHub Pages does not apply `_headers`. The live preview therefore has no CSP
+header, no frame denial and no permissions policy. That remains a launch gap;
+the local `_headers` file is not evidence of a live header.
 
 ## Accessibility
 
@@ -133,7 +147,7 @@ result. The copy was discarded.
 * One Lighthouse run per URL, simulated mobile, not field data.
 * No screen-reader or disabled-user audit.
 * GitHub Pages cannot apply `_headers`, so the deployed preview has no CSP
-  header. The custom 404 still needs a live check.
+  header, frame denial or permissions policy.
 * SEO is a launch gate, not a pass.
 * The design has been reviewed from screenshots at 375, 768 and 1280 in both
   themes, but not by an independent designer.

@@ -18,8 +18,9 @@ facts. Nothing on the site claims a release.
 | Tests | 41 Playwright tests, axe on 13 pages in both themes |
 | Assets | Self-hosted subset fonts, SVG favicon, generated 1200x630 OG image |
 | CI | cargo jobs unchanged; a `site` job runs checks, tests, Lighthouse |
+| Deployment | GitHub Pages preview is live at https://kael-tombo.github.io/Jx/ |
 | Production | Blocked by 21 `{{TODO}}` placeholders |
-| Final verification | `check`, spellcheck, 41 browser tests and Lighthouse pass; SEO 58 is the intentional preview gate |
+| Final verification | Site CI job and Pages deploy pass; 41 browser tests, `check` and Lighthouse pass; SEO 58 is the intentional preview gate |
 
 ## Decisions
 
@@ -58,9 +59,10 @@ Earlier ADRs are the Rust project's; they are linked from `/docs/decisions`.
 
 ## Next step
 
-The owner fills `docs/LAUNCH.md`. Then flip indexing as described there, deploy
-`public/` unchanged, verify the headers, run the production gate and re-measure.
-Do not add a signup form before an endpoint exists.
+The preview is deployed. The owner fills `docs/LAUNCH.md`. Then flip indexing as
+described there, choose whether the `_headers` CSP gap is acceptable, run the
+production gate and re-measure. Do not add a signup form before an endpoint
+exists.
 
 ## Commands
 

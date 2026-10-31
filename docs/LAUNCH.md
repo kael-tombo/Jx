@@ -6,6 +6,18 @@ returns non-zero while any `{{TODO}}` remains. The 21 current placeholders are
 grouped under the gates below; `node scripts/check-todos.mjs` prints the exact
 file and line for each.
 
+## Preview deployment
+
+* Live preview: https://kael-tombo.github.io/Jx/
+* Workflow: `.github/workflows/pages.yml`, uploading `public/` as the Pages
+  artifact on pushes to `main`.
+* Verified 2026-11-01: all 13 pages load with one H1 and no console errors or
+  failed assets; the shared CSS, JavaScript and fonts return 200; the custom
+  404 returns 404 and its CSS loads.
+* GitHub Pages ignores `_headers`. The live preview therefore has no CSP
+  header, no `X-Frame-Options` and no `Permissions-Policy`. This is an open
+  security gate, not a completed one.
+
 ## Owner decisions
 
 | # | Gate | Where | State |
@@ -38,8 +50,9 @@ file and line for each.
 ## Before publishing
 
 1. Serve the exact `public/` folder on the chosen host. Do not add a build step.
-2. Confirm the CSP header is actually returned. Opening `tests/server.mjs` does
-   not prove the host applies `_headers`.
+2. GitHub Pages does not apply `_headers`; the preview has no CSP. If the strict
+   header is required, choose a host that supports `_headers` or put a proxy in
+   front. Do not treat the local `_headers` file as proof of a live header.
 3. Test `/missing-page` returns the custom 404.
 4. Confirm the signup form, if added, posts only to the configured endpoint and
    has the consent sentence.

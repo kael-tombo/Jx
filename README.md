@@ -97,7 +97,8 @@ wanted prefixes today).
 
 The public design preview lives in `public/`: hand-written HTML, CSS and ES
 modules, no framework and no build step. It describes the plan; it never claims
-a release. Open `public/index.html` directly or serve the folder:
+a release. Live preview: [https://kael-tombo.github.io/Jx/](https://kael-tombo.github.io/Jx/).
+Open `public/index.html` directly or serve the folder:
 
 ```sh
 npm install                # dev tooling only; the site has no runtime deps

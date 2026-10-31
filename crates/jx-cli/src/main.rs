@@ -40,10 +40,10 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M5 (packaging and Maven export). Live: jx jdk <command>, \
-jx new/init, jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package, \
-jx export maven and jx doctor. Jlink images, Maven/Gradle import and Gradle \
-export are still ahead."
+small manifest.\n\nStatus: M6 (runtime images). Live: jx jdk <command>, jx new/init, \
+jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package/image, \
+jx export maven and jx doctor. Maven/Gradle import and Gradle export are \
+still ahead."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -131,6 +131,12 @@ enum Command {
         /// Merge dependencies into one runnable jar instead of a thin jar + lib/
         #[arg(long)]
         fat: bool,
+    },
+    /// Build a runtime image with jdeps + jlink under target/dist/runtime
+    Image {
+        /// Include every JDK module instead of trimming to the app's needs
+        #[arg(long)]
+        full: bool,
     },
     /// Remove target/
     Clean,
@@ -225,6 +231,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
         Command::Test => build::test(cli),
         Command::Package { fat } => build::package(cli, *fat).map(|()| ExitCode::SUCCESS),
+        Command::Image { full } => build::image(cli, *full).map(|()| ExitCode::SUCCESS),
         Command::Export(ExportCommand::Maven { group_id, force }) => {
             build::export_maven(cli, group_id, *force).map(|()| ExitCode::SUCCESS)
         }

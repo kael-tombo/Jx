@@ -1,10 +1,13 @@
-//! Packaging: a portable thin `dist/` directory and an opt-in fat jar.
+//! Packaging: a portable thin `dist/` directory, an opt-in fat jar, and a
+//! verified jlink runtime image.
 //!
 //! Thin: the project jar contains only project classes and resources;
 //! dependencies are copied below `dist/lib/<group path>/` and referenced from
 //! the manifest's `Class-Path`, so the whole `dist/` tree is portable.
 //! Fat: dependency classes/resources are merged into one jar with explicit
-//! duplicate, service-file, signature and multi-release rules.
+//! duplicate, service-file, signature and multi-release rules. Image: a
+//! `jdeps`-selected `jlink` runtime under `dist/runtime`, with an explicit
+//! full-runtime fallback and pre-replacement verification.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::{Read as _, Write as _};
@@ -12,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use jx_common::error::{JxError, Kind};
 
+pub mod image;
 pub mod maven;
 
 /// Thin jar + `dist/lib`, or one merged fat jar.

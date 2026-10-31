@@ -24,14 +24,17 @@ the thin jar and `target/dist` layout;
 [decisions/0006-fat-jar-merge-rules.md](decisions/0006-fat-jar-merge-rules.md)
 — opt-in fat-jar merging;
 [decisions/0007-maven-export.md](decisions/0007-maven-export.md) — what the
-generated POM does and does not reproduce. Still planned for later milestones:
+generated POM does and does not reproduce;
+[decisions/0009-runtime-images.md](decisions/0009-runtime-images.md) — the
+jdeps/jlink image and its full-runtime fallback. Still planned for later
+milestones:
 
 * `docs/quickstart.md` — the executed-in-CI quickstart
 * `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
 
-M4 behaviour is described in the README quickstart and
-[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md); no separate build/test guide is
-written yet.
+Build/test (M4), packaging (M5) and runtime-image (M6) behaviour is described
+in the README quickstart and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md); no
+separate build/test guide is written yet.
 
 ## Workspace layout
 
@@ -66,7 +69,7 @@ milestones; nothing in this repository claims to support them yet.
 | M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
 | M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **done** — POM export is an approximation (ADR 0007) |
-| M6 | Runtime trimming: jdeps + jlink with fallback | not started |
+| M6 | Runtime trimming: jdeps + jlink with fallback | **done** — `jx image`, verified and atomic; reflection risk documented |
 | M7 | Maven and Gradle interop: import, compatibility, delegate, exports | not started |
 | M8 | Release hardening: docs, install script, security checklist | not started |
 

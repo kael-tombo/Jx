@@ -70,9 +70,10 @@ The command is `jx package`; `jx build` remains compile-only.
   with it.
 * Opt-in fat jars were added later with explicit merge rules in
   [ADR 0006](0006-fat-jar-merge-rules.md). Maven POM export is described in
-  [ADR 0007](0007-maven-export.md). No jar signing, relocation-aware shading,
-  jlink image or native launcher yet; those remain M6/M7 work and are listed
-  in `docs/KNOWN_LIMITATIONS.md`.
+  [ADR 0007](0007-maven-export.md); runtime images are a separate `jx image`
+  step described in [ADR 0009](0009-runtime-images.md). No jar signing,
+  relocation-aware shading or native launcher yet; those remain later
+  milestone work and are listed in `docs/KNOWN_LIMITATIONS.md`.
 * Packaging reuses the normal compile and lock fast paths: dependencies come
   from verified cache entries and no network is needed when the lock and
   cache are complete.

@@ -3,12 +3,12 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M5 done; annotation processors still deferred from M4)
+## Current (M6 done; annotation processors still deferred from M4)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
-`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx export maven`,
-`jx clean`. M2 delivered the
+`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx image`,
+`jx export maven`, `jx clean`. M2 delivered the
 repository client (fetch with always-on checksum verification, mirrors,
 proxies, auth references, content cache), POM/`maven-metadata.xml` models,
 Maven version ordering and the effective-POM loader. M3 added the resolver,
@@ -16,8 +16,9 @@ the lockfile, the six dependency commands, and the lock fast path that puts
 cached jars on javac's and java's classpath. M4 added fingerprint-skipped
 javac builds, separate main/test dependency classpaths, test compilation and
 JUnit 5 execution. M5 added thin jars, fat jars, the `target/dist` layout and
-Maven POM export; jlink images (M6) and Maven/Gradle import (M7) are still
-ahead.
+Maven POM export. M6 added `jx image`, which builds a jdeps-trimmed jlink
+runtime beside the app and falls back to a full runtime when analysis cannot
+trim. Maven/Gradle import (M7) is still ahead.
 
 ### Manifest
 
@@ -146,14 +147,43 @@ ahead.
   tree.
 - **Fat jars are not a general shaded-jar replacement yet.** Multi-release
   dependency behavior is lost, `module-info` is omitted, and duplicate
-  resources do not get artifact-specific names. There is no jar signing or
-  jlink/jdeps trimming.
+  resources do not get artifact-specific names. There is no jar signing.
+- **`jx package` does not create a runtime.** Use `jx image` for a jlink
+  runtime; packaging and image building share the same `target/dist`, and
+  packaging rebuilds it.
 - **Packaging is application and library friendly**: a discovered or pinned
   main class becomes `Main-Class`; a library with no main class still gets a
   jar, without that header. Ambiguous main classes fail rather than choosing
   one silently.
 - **No launch scripts or native installers.** Users run `java -jar` today.
 - **`jx clean` removes `target/dist`** with the rest of `target/`.
+
+### Runtime images (M6)
+
+- **`jx image` builds a trimmed runtime at `target/dist/runtime`** from the
+  pinned JDK, then prints the exact `runtime/bin/java -jar` command. The
+  application must have a main class; libraries should stay with
+  `jx package`.
+- **`jdeps` sees class references, not reflection or dynamic loading.** A
+  trimmed image can still fail if the app loads modules by name. jx prints a
+  note and offers `jx image --full`; it does not claim runtime correctness.
+- **`--ignore-missing-deps` is deliberate.** Optional annotation classes do
+  not block analysis, but a genuinely missing dependency can also leave the
+  module set incomplete. Use `--full` when the app needs a guaranteed
+  runtime.
+- **Fallback is explicit.** When `jdeps` cannot run or produces no module
+  list, jx builds a full `ALL-MODULE-PATH` runtime and reports that mode. The
+  full image is much larger; `--full` skips analysis deliberately.
+- **Images are atomic and verified.** `jlink` writes a temporary directory,
+  jx starts it with `--list-modules` and checks every requested module, then
+  replaces the previous runtime. Before packaging, the whole previous
+  `target/dist` is backed up and restored if any later step fails, so a failed
+  image does not destroy a working app/runtime pair.
+- **No `--compress`, cross-compilation, signing or jpackage.** The image is
+  for the current platform and pinned JDK; compression flags changed across
+  JDK releases, so none is passed. JDK 8 is refused before writing.
+- **`jx package` removes `target/dist/runtime`** because it rebuilds `dist`
+  from scratch. Run `jx image` again when the runtime is needed.
 
 ### Maven export (M5)
 
@@ -166,8 +196,9 @@ ahead.
 - **Platform BOMs are not emitted as imports.** Their effect is inlined into
   the concrete versions of the direct dependencies; Maven's transitive graph
   can still differ from jx's nearest-wins resolution.
-- **Annotation-processor paths, jx fingerprints and jlink trimming are not
-  exported.** The generated POM is a starting point for a normal Maven build.
+- **Annotation-processor paths, jx fingerprints and runtime-image trimming
+  are not exported.** The generated POM is a starting point for a normal
+  Maven build.
 - **The POM is compiled first**: export runs the normal build so a discovered
   main class can be written into the jar plugin.
 - **An existing `pom.xml` is never overwritten without `--force`.**

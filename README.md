@@ -1,8 +1,8 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M5 done: build, run, test, packaging and
-> Maven export).** This README describes the intent of the project, not yet
-> its shipped abilities; see
+> **Status: under construction (M6 done: build, run, test, packaging, Maven
+> export and runtime images).** This README describes the intent of the
+> project, not yet its shipped abilities; see
 > [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
@@ -52,6 +52,8 @@ jx run               # javac and java get the locked jars on their classpath
 jx package           # target/dist: runnable jar + lib/ dependency tree
 java -jar target/dist/hello-0.1.0.jar
 jx package --fat     # one merged jar: target/dist/hello-0.1.0-all.jar
+jx image             # target/dist/runtime: trimmed jlink runtime
+jx image --full      # all JDK modules when reflection needs them
 jx export maven --group-id com.example  # write a POM from the lockfile
 
 # Tests
@@ -73,11 +75,14 @@ files are merged, and signatures/multi-release entries are intentionally
 omitted. `jx export maven` writes a POM using the concrete versions from
 `jx.lock`, test scope for dev dependencies and managed entries for overrides;
 platform BOMs are inlined and an existing `pom.xml` is not overwritten unless
-`--force` is passed (ADR 0007).
+`--force` is passed (ADR 0007). `jx image` asks `jdeps` which modules the app
+needs, builds a verified `jlink` runtime under `target/dist/runtime`, and
+falls back to a full runtime when analysis cannot trim; use `--full` when
+reflection loads modules at runtime (ADR 0009).
 
-Not yet usable (they report their milestone): jlink images (M6), import (M7),
-annotation processors (deferred from M4), and a separate `update` command
-(`jx lock` re-resolves wanted prefixes today).
+Not yet usable (they report their milestone): import (M7), annotation
+processors (deferred from M4), and a separate `update` command (`jx lock`
+re-resolves wanted prefixes today).
 
 ## Repository
 
@@ -85,6 +90,7 @@ annotation processors (deferred from M4), and a separate `update` command
 * [docs/decisions/](docs/decisions/) — architectural decision records
 * [docs/exit-codes.md](docs/exit-codes.md) — the exit-code contract
 * [docs/decisions/0007-maven-export.md](docs/decisions/0007-maven-export.md) — what `jx export maven` reproduces
+* [docs/decisions/0009-runtime-images.md](docs/decisions/0009-runtime-images.md) — jdeps/jlink image decisions
 * [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — what does not work yet
 
 ## Licence

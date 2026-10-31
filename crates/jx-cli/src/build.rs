@@ -300,6 +300,137 @@ pub fn package(cli: &Cli, fat: bool) -> Result<(), JxError> {
     Ok(())
 }
 
+/// `jx image`: package the thin dist, then add a jlink runtime beside the
+/// application jar. The app must have a main class; a library can still be
+/// packaged, but there is no program for the image to run.
+///
+/// The previous `target/dist` is moved aside before packaging and restored if
+/// anything after that fails, so a failed image build does not destroy a
+/// working app/runtime pair.
+pub fn image(cli: &Cli, full: bool) -> Result<(), JxError> {
+    let loaded = load(cli)?;
+    let dist = target_dir(&loaded).join("dist");
+    let backup = target_dir(&loaded).join(format!(".jx-dist-backup-{}", std::process::id()));
+    if backup.exists() {
+        remove_dist_path(&backup).map_err(|e| {
+            JxError::new(Kind::Io, "cannot clear a stale image backup")
+                .at(backup.display().to_string())
+                .caused_by(e)
+        })?;
+    }
+    let had_dist = dist.exists();
+    if had_dist {
+        std::fs::rename(&dist, &backup).map_err(|e| {
+            JxError::new(
+                Kind::Io,
+                "cannot move the previous dist aside for the image",
+            )
+            .at(dist.display().to_string())
+            .caused_by(e)
+            .hint("close any running program that holds files under target/dist")
+        })?;
+    }
+
+    let result = image_into(cli, full);
+    match result {
+        Ok(()) => {
+            if had_dist && let Err(e) = remove_dist_path(&backup) {
+                eprintln!(
+                    "warning: image is ready, but the previous dist backup could not be removed: {e}"
+                );
+            }
+            Ok(())
+        }
+        Err(error) => {
+            if let Err(e) = remove_dist_path(&dist) {
+                eprintln!("warning: could not remove the incomplete target/dist: {e}");
+            }
+            if had_dist && let Err(e) = std::fs::rename(&backup, &dist) {
+                eprintln!("warning: could not restore the previous target/dist: {e}");
+            }
+            Err(error)
+        }
+    }
+}
+
+fn remove_dist_path(path: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
+        Ok(_) => std::fs::remove_file(path),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+fn image_into(cli: &Cli, full: bool) -> Result<(), JxError> {
+    package(cli, false)?;
+    let loaded = load(cli)?;
+    let deps = deps::classpaths(cli)?;
+    let feature = loaded.manifest.jdk_feature()?;
+    let jdk = ensure_jdk(cli, feature)?;
+    let classes = target_dir(&loaded).join("classes");
+    jx_run::decide_main(&classes, loaded.manifest.main_class()).map_err(|e| {
+        e.hint("jx image needs an application; add `[run] main` or keep using `jx package` for a library")
+    })?;
+
+    let dist = target_dir(&loaded).join("dist");
+    let jar_name = jx_package::jar_file_name(&loaded.manifest.name, &loaded.manifest.version)?;
+    let jar = dist.join(jar_name);
+    if !jar.is_file() {
+        return Err(JxError::new(
+            Kind::Internal,
+            "jx package succeeded but the application jar is missing",
+        )
+        .at(jar.display().to_string())
+        .hint("run `jx package` again; if this repeats, report it as a jx bug"));
+    }
+    let classpath = deps
+        .main
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(jx_run::classpath_separator());
+    let output = jx_package::image::build(&jx_package::image::ImageRequest {
+        jdeps: &jdk.jdeps(),
+        jlink: &jdk.jlink(),
+        classes_dir: &classes,
+        classpath: &classpath,
+        output_dir: &dist.join("runtime"),
+        feature,
+        full,
+    })?;
+
+    let display = output
+        .runtime
+        .strip_prefix(&loaded.manifest_dir)
+        .unwrap_or(&output.runtime);
+    let description = match output.mode {
+        jx_package::image::ImageMode::Trimmed => {
+            format!("trimmed runtime: {}", output.modules.join(", "))
+        }
+        jx_package::image::ImageMode::Full => "full runtime, all modules".to_string(),
+        jx_package::image::ImageMode::FullFallback => format!(
+            "full runtime; jdeps could not trim: {}",
+            output
+                .fallback_reason
+                .as_deref()
+                .unwrap_or("unknown reason")
+        ),
+    };
+    println!("image: {} ({description})", display.display());
+    println!(
+        "  run: {} -jar {}",
+        jx_package::image::runtime_java(&output.runtime).display(),
+        jar.display()
+    );
+    if output.mode == jx_package::image::ImageMode::Trimmed {
+        println!(
+            "  note: jdeps reads class references only; use `jx image --full` if reflection loads more modules"
+        );
+    }
+    Ok(())
+}
+
 /// Map one manifest declaration to a POM dependency using its locked
 /// version. Platform BOMs are skipped: their effect is already baked into the
 /// concrete versions of every other dependency.

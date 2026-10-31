@@ -29,6 +29,16 @@ impl InstalledJdk {
     pub fn javac(&self) -> PathBuf {
         with_platform_bin(self.dir.clone(), "javac")
     }
+
+    /// The module analyser used by `jx image`.
+    pub fn jdeps(&self) -> PathBuf {
+        with_platform_bin(self.dir.clone(), "jdeps")
+    }
+
+    /// The runtime-image linker used by `jx image`.
+    pub fn jlink(&self) -> PathBuf {
+        with_platform_bin(self.dir.clone(), "jlink")
+    }
 }
 
 fn with_platform_bin(dir: PathBuf, tool: &str) -> PathBuf {
@@ -261,5 +271,17 @@ mod tests {
             "javac"
         };
         assert_eq!(j.javac().file_name().unwrap(), expected);
+        let expected = if std::env::consts::OS == "windows" {
+            "jdeps.exe"
+        } else {
+            "jdeps"
+        };
+        assert_eq!(j.jdeps().file_name().unwrap(), expected);
+        let expected = if std::env::consts::OS == "windows" {
+            "jlink.exe"
+        } else {
+            "jlink"
+        };
+        assert_eq!(j.jlink().file_name().unwrap(), expected);
     }
 }

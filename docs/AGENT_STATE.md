@@ -12,7 +12,7 @@ facts. Nothing on the site claims a release.
 | --- | --- |
 | Pages | 13: landing, vision, roadmap, privacy, accessibility, 404, seven docs pages |
 | Design system | Tokens, type scale, components, patterns page, print stylesheet |
-| Framing | Cargo, uv and npm for Java; one run command across stacks is the destination, plain Java in V1 |
+| Framing | Cargo, uv and npm for Java; one run command across stacks is the destination, plain Java in V1; a workflow tool, not a runtime or a bundled JRE |
 | JavaScript | Theme init, theme toggle, terminal, copy. All optional. |
 | Checks | claims, todos, contrast, shared markup, links, HTML validator, spellcheck |
 | Tests | 41 Playwright tests, axe on 13 pages in both themes |
@@ -27,6 +27,10 @@ facts. Nothing on the site claims a release.
 * The owner's framing (2026-11-01): Cargo, uv and npm for Java; one `jx run`
   across stacks is the destination, with plain Java in V1. The landing, vision,
   quickstart, Maven/Gradle guide, glossary and social image carry it.
+* The owner's framing from a public exchange (2026-11-01): Java needs a platform
+  tool, not a larger JRE. jx is the workflow layer, independent and not a
+  runtime; `jlink` is optional deployment packaging, not the thesis. The
+  landing, vision, FAQ, roadmap and glossary carry the distinction.
 * 0100 — reference-manual design system, token palette, typography.
 * 0101 — design preview status, "Not released" instead of "Not started",
   placeholders and the claims checks.

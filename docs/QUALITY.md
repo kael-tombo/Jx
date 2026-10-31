@@ -93,6 +93,9 @@ or an independent audit by a disabled user. The accessibility page says so.
 * No testimonials, logos, star counts, user numbers, benchmarks, release dates,
   versions or download links are present. The only performance number is the
   five-minute target, listed in `scripts/allowed-numbers.json`.
+* The landing, vision, FAQ, roadmap and glossary separate the workflow layer
+  from runtime packaging: jx does not bundle a JRE and does not claim to fix
+  the JRE's size; `jlink` is optional deployment packaging.
 * The terminal caption stays visible in every state and says the output is
   illustrative and not a recording.
 * Milestones say "Not released" rather than "Not started"; the reason is ADR

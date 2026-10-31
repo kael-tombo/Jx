@@ -108,12 +108,20 @@
             <dd>A named stage of the plan, M0 to M8, with a decision gate before it closes.</dd>
           </div>
           <div>
+            <dt id="glossary-platform-tool">Platform tool</dt>
+            <dd>A single command-line tool that owns an ecosystem's everyday workflow: one manifest, one command set, dependency resolution and builds. Cargo, uv and npm are examples. jx is an independent proposal for Java, not an official platform tool.</dd>
+          </div>
+          <div>
             <dt id="glossary-pom">POM</dt>
             <dd>Maven's project object model. jx would read POM metadata to resolve dependencies.</dd>
           </div>
           <div>
             <dt id="glossary-resolver">Resolver</dt>
             <dd>The component that reads dependency metadata, selects versions and writes the lockfile.</dd>
+          </div>
+          <div>
+            <dt id="glossary-runtime-image">Runtime image</dt>
+            <dd>A Java runtime assembled for deployment, optionally trimmed with the JDK's <code>jlink</code> when packaging. It is a deployment artifact, not a platform tool, and jx does not claim it fixes the JRE's size.</dd>
           </div>
           <div>
             <dt id="glossary-status">Status</dt>

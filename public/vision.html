@@ -49,6 +49,13 @@
             <p>jx is a proposal for that door. It would manage the JDK, resolve dependencies from Maven Central, and build, test, run and package a project from one manifest. The destination is one run command: <code>jx run</code> for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE. It is written in Rust and will ship as one binary. Nothing is released yet.</p>
           </section>
 
+          <section aria-labelledby="layer-title">
+            <h2 id="layer-title">A platform tool, not a runtime</h2>
+            <p>Two arguments are often made together: Java needs one tool for the everyday workflow, and the JRE is larger than it needs to be. They point at different layers. jx is aimed at the first: one manifest, one JDK pin, one command set, dependencies from Maven Central.</p>
+            <p>It would not add a runtime to every project or ask the JDK to ship more. It installs the JDK a project pins and reuses it. The optional runtime image in the plan uses the JDK's own <code>jlink</code> as packaging for a deployment, not as a change to what the JDK ships.</p>
+            <p><code>jlink</code> can trim a runtime after it exists. It does not give a project a manifest, a resolver or a run command. A platform tool can provide those without changing what the JDK ships. jx is independent; it is not an official Java tool and does not speak for the platform.</p>
+          </section>
+
           <section aria-labelledby="smooth-title">
             <h2 id="smooth-title">What smooth means</h2>
             <p>Smooth is not a feeling in a launch post. It is five properties that can be tested.</p>
@@ -105,6 +112,9 @@
 
             <h3>Maturity</h3>
             <p>Cargo and uv have years of use and many edge cases behind them. jx starts at zero. The comparison is about shape, not experience.</p>
+
+            <h3>The JRE's size</h3>
+            <p>jx is a workflow tool, not a new JDK. It does not change what the JDK ships. An optional runtime image may be smaller because it uses the JDK's own <code>jlink</code> to assemble a deployment runtime; that is packaging, not a fix for the JRE's size.</p>
           </section>
 
           <section aria-labelledby="scope-title">

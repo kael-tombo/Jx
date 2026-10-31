@@ -116,6 +116,19 @@ Hello, world!</code></pre>
       </div>
     </section>
 
+    <section class="section" aria-labelledby="runtime-title">
+      <div class="wrap section-grid">
+        <div class="section-head">
+          <h2 id="runtime-title">A front door, not a new runtime.</h2>
+        </div>
+        <div class="section-body">
+          <p>The case for a Cargo-like tool is not a case for a larger Java. jx would not bundle a JRE into every project, vendor dependencies into the repository, or ask the JDK to include more.</p>
+          <p>It would install the JDK a project pins and reuse it from a local store. Libraries would still come from Maven Central. An optional runtime image built with the JDK's own <code>jlink</code> is planned as packaging for a deployment. <code>jlink</code> can trim a runtime after it exists; it does not provide a manifest, a resolver or a command set.</p>
+          <p class="pullquote">The goal is a shorter path, not a larger bundle.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="section" aria-labelledby="smooth-title">
       <div class="wrap section-grid">
         <div class="section-head">
@@ -186,7 +199,7 @@ Hello, world!</code></pre>
 
                 <rect class="node" x="700" y="38" width="200" height="100" rx="6"></rect>
                 <text class="node-title" x="716" y="68">Packager</text>
-                <text class="node-detail" x="716" y="88">jar, dist, optional jlink</text>
+                <text class="node-detail" x="716" y="88">jar, dist, optional runtime</text>
                 <rect class="node--reused" x="716" y="101" width="74" height="18" rx="3"></rect>
                 <text class="reused-label" x="724" y="114">JDK tools</text>
 
@@ -226,7 +239,7 @@ Hello, world!</code></pre>
 
                 <rect class="node" x="30" y="348" width="300" height="84" rx="6"></rect>
                 <text class="node-title" x="46" y="379">Packager</text>
-                <text class="node-detail" x="46" y="399">jar, dist, optional jlink</text>
+                <text class="node-detail" x="46" y="399">jar, dist, optional runtime</text>
                 <text class="reused-label" x="46" y="417">reused: JDK tools</text>
 
                 <path class="flow" d="M180 84 V108" marker-end="url(#arrow-narrow)"></path>
@@ -459,6 +472,8 @@ Hello, world!</code></pre>
           <h3>Not before 1.0</h3>
           <ul>
             <li>Not a deployment tool.</li>
+            <li>Not a new JDK or a replacement JRE.</li>
+            <li>Not a fix for the JRE's size.</li>
             <li>Not a replacement for Maven Central.</li>
             <li>No plugin ecosystem of its own.</li>
             <li>No telemetry in V1.</li>
@@ -481,6 +496,10 @@ Hello, world!</code></pre>
             <details>
               <summary>Does it replace Maven or Gradle?</summary>
               <p>No. It reuses Maven Central. Import, export and delegate modes are planned.</p>
+            </details>
+            <details>
+              <summary>Is jx another runtime, or a fix for the JRE's size?</summary>
+              <p>No. It is a workflow tool. It installs the JDK a project pins and resolves libraries from Maven Central; it does not add a JRE to every project. An optional runtime image built with the JDK's own <code>jlink</code> is planned as packaging for a deployment. <code>jlink</code> trims a runtime; it does not provide a manifest, a resolver or a run command. It is not a fix for the JRE's size.</p>
             </details>
             <details>
               <summary>Why Rust?</summary>

@@ -36,6 +36,9 @@ pub(crate) struct Classpaths {
     pub main: Vec<PathBuf>,
     pub main_jars: Vec<LockedJar>,
     pub test: Vec<PathBuf>,
+    /// Every locked artifact, including dev-only ones. Used by exporters that
+    /// must map manifest declarations to concrete versions.
+    pub all_jars: Vec<LockedJar>,
     /// The JUnit Platform console standalone jar, when the project depends on it.
     pub junit_launcher: Option<PathBuf>,
 }
@@ -358,6 +361,7 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
                 main: Vec::new(),
                 main_jars: Vec::new(),
                 test: Vec::new(),
+                all_jars: Vec::new(),
                 junit_launcher: None,
             });
         }
@@ -402,18 +406,21 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
     let mut main = Vec::new();
     let mut main_jars = Vec::new();
     let mut test = Vec::new();
+    let mut all_jars = Vec::new();
     let mut junit_launcher = None;
     for artifact in &lock.artifacts {
         let path = cache.path_of(&artifact.sha256)?;
+        let jar = LockedJar {
+            group_id: artifact.group_id.clone(),
+            artifact_id: artifact.artifact_id.clone(),
+            version: artifact.version.clone(),
+            classifier: artifact.classifier.clone(),
+            path: path.clone(),
+        };
+        all_jars.push(jar.clone());
         if !artifact.dev {
             main.push(path.clone());
-            main_jars.push(LockedJar {
-                group_id: artifact.group_id.clone(),
-                artifact_id: artifact.artifact_id.clone(),
-                version: artifact.version.clone(),
-                classifier: artifact.classifier.clone(),
-                path: path.clone(),
-            });
+            main_jars.push(jar);
         }
         if artifact.artifact_id == "junit-platform-console-standalone" {
             junit_launcher = Some(path.clone());
@@ -424,6 +431,7 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
         main,
         main_jars,
         test,
+        all_jars,
         junit_launcher,
     })
 }

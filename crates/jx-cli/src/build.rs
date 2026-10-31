@@ -300,6 +300,112 @@ pub fn package(cli: &Cli, fat: bool) -> Result<(), JxError> {
     Ok(())
 }
 
+/// Map one manifest declaration to a POM dependency using its locked
+/// version. Platform BOMs are skipped: their effect is already baked into the
+/// concrete versions of every other dependency.
+fn maven_dependencies(
+    specs: &[manifest::DependencySpec],
+    jars: &[deps::LockedJar],
+    scope: Option<&'static str>,
+) -> Result<Vec<jx_package::maven::MavenDependency>, JxError> {
+    let mut out = Vec::new();
+    for spec in specs {
+        if spec.platform {
+            continue;
+        }
+        let jar = jars
+            .iter()
+            .find(|jar| {
+                jar.group_id == spec.group_id
+                    && jar.artifact_id == spec.artifact_id
+                    && jar.classifier.as_deref() == spec.classifier.as_deref()
+            })
+            .ok_or_else(|| {
+                JxError::new(
+                    Kind::Resolve,
+                    format!(
+                        "{}:{} has no locked artifact to export",
+                        spec.group_id, spec.artifact_id
+                    ),
+                )
+                .hint("run `jx lock` to refresh jx.lock, then export again")
+            })?;
+        let mut dependency =
+            jx_package::maven::MavenDependency::new(&jar.group_id, &jar.artifact_id, &jar.version);
+        if let Some(classifier) = &jar.classifier {
+            dependency = dependency.classifier(classifier);
+        }
+        if scope == Some("test") {
+            dependency = dependency.test_scope();
+        }
+        out.push(dependency);
+    }
+    Ok(out)
+}
+
+/// `jx export maven`: compile once (so a discovered main class is included),
+/// then write a POM that mirrors project.toml and the locked versions.
+pub fn export_maven(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxError> {
+    let loaded = load(cli)?;
+    let path = loaded.manifest_dir.join("pom.xml");
+    if path.exists() && !force {
+        return Err(JxError::new(Kind::Io, "pom.xml already exists")
+            .at(path.display().to_string())
+            .hint("move it aside, or rerun with `jx export maven --force` to overwrite"));
+    }
+    let deps = deps::classpaths(cli)?;
+    let feature = loaded.manifest.jdk_feature()?;
+    let jdk = ensure_jdk(cli, feature)?;
+    let (classes, _) = compile_main(&loaded, &jdk, &deps)?;
+    let main_class = package_main(&classes, loaded.manifest.main_class())?;
+
+    let mut dependencies = maven_dependencies(&loaded.manifest.dependencies, &deps.all_jars, None)?;
+    dependencies.extend(maven_dependencies(
+        &loaded.manifest.dev_dependencies,
+        &deps.all_jars,
+        Some("test"),
+    )?);
+    let mut overrides = Vec::new();
+    for spec in &loaded.manifest.overrides {
+        if let Some(jar) = deps.all_jars.iter().find(|jar| {
+            jar.group_id == spec.group_id
+                && jar.artifact_id == spec.artifact_id
+                && jar.classifier.is_none()
+        }) {
+            overrides.push(jx_package::maven::MavenDependency::new(
+                &jar.group_id,
+                &jar.artifact_id,
+                &jar.version,
+            ));
+        }
+    }
+
+    let main_count = dependencies
+        .iter()
+        .filter(|dependency| dependency.scope.is_none())
+        .count();
+    let test_count = dependencies.len() - main_count;
+    let managed_count = overrides.len();
+    let project = jx_package::maven::MavenProject {
+        group_id: group_id.to_string(),
+        artifact_id: loaded.manifest.name.clone(),
+        version: loaded.manifest.version.clone(),
+        java_release: feature,
+        main_class,
+        dependencies,
+        overrides,
+    };
+    let pom = jx_package::maven::pom(&project)?;
+    std::fs::write(&path, pom).map_err(|e| {
+        JxError::new(Kind::Io, "cannot write pom.xml")
+            .at(path.display().to_string())
+            .caused_by(e)
+    })?;
+    println!("exported pom.xml ({main_count} main, {test_count} test, {managed_count} managed)");
+    println!("  build with: mvn -f pom.xml package");
+    Ok(())
+}
+
 /// `jx run [-- args]`, with optional `--debug [--port N]`.
 pub fn run(cli: &Cli, debug_port: Option<u16>, argv: Vec<String>) -> Result<ExitCode, JxError> {
     let loaded = load(cli)?;

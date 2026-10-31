@@ -3,19 +3,21 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M5 in progress; thin and fat packaging done)
+## Current (M5 done; annotation processors still deferred from M4)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
-`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx clean`. M2 delivered the
+`jx why`, `jx build`, `jx test`, `jx run`, `jx package`, `jx export maven`,
+`jx clean`. M2 delivered the
 repository client (fetch with always-on checksum verification, mirrors,
 proxies, auth references, content cache), POM/`maven-metadata.xml` models,
 Maven version ordering and the effective-POM loader. M3 added the resolver,
 the lockfile, the six dependency commands, and the lock fast path that puts
 cached jars on javac's and java's classpath. M4 added fingerprint-skipped
 javac builds, separate main/test dependency classpaths, test compilation and
-JUnit 5 execution. M5 added thin jars, fat jars and the `target/dist` layout;
-jlink images and `export maven` are still open.
+JUnit 5 execution. M5 added thin jars, fat jars, the `target/dist` layout and
+Maven POM export; jlink images (M6) and Maven/Gradle import (M7) are still
+ahead.
 
 ### Manifest
 
@@ -152,8 +154,25 @@ jlink images and `export maven` are still open.
   one silently.
 - **No launch scripts or native installers.** Users run `java -jar` today.
 - **`jx clean` removes `target/dist`** with the rest of `target/`.
-- **`jx export maven` remains unimplemented**; packaging does not yet emit an
-  equivalent Maven build.
+
+### Maven export (M5)
+
+- **`jx export maven` is an approximate conversion, not a round trip.** It
+  writes direct dependencies with the concrete versions from `jx.lock`, dev
+  dependencies as `test` scope, classifiers, `<maven.compiler.release>`, the
+  jar main class and managed entries for `[overrides]` (ADR 0007). Executable
+  exports also copy runtime dependencies to `target/lib` and write a relative
+  `Class-Path`, so `java -jar` works after `mvn package`.
+- **Platform BOMs are not emitted as imports.** Their effect is inlined into
+  the concrete versions of the direct dependencies; Maven's transitive graph
+  can still differ from jx's nearest-wins resolution.
+- **Annotation-processor paths, jx fingerprints and jlink trimming are not
+  exported.** The generated POM is a starting point for a normal Maven build.
+- **The POM is compiled first**: export runs the normal build so a discovered
+  main class can be written into the jar plugin.
+- **An existing `pom.xml` is never overwritten without `--force`.**
+- **The default Maven groupId is `local.jx`**; pass `--group-id` for a real
+  coordinate. Gradle export is still planned for M7.
 
 ### Toolchain (from M1)
 

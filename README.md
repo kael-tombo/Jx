@@ -1,9 +1,9 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M5 in progress; thin and fat packaging done).**
-> This README describes the intent of the project, not yet its shipped
-> abilities; see [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the
-> honest state.
+> **Status: under construction (M5 done: build, run, test, packaging and
+> Maven export).** This README describes the intent of the project, not yet
+> its shipped abilities; see
+> [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
 resolves dependencies from Maven Central into a reproducible lockfile, and
@@ -52,6 +52,7 @@ jx run               # javac and java get the locked jars on their classpath
 jx package           # target/dist: runnable jar + lib/ dependency tree
 java -jar target/dist/hello-0.1.0.jar
 jx package --fat     # one merged jar: target/dist/hello-0.1.0-all.jar
+jx export maven --group-id com.example  # write a POM from the lockfile
 
 # Tests
 jx add --dev org.junit.platform:junit-platform-console-standalone
@@ -69,17 +70,21 @@ whole `target/dist` tree can be moved and still run with `java -jar`.
 `jx package --fat` instead merges main dependencies into one
 `<name>-<version>-all.jar`; duplicate classes are first-wins, `META-INF/services`
 files are merged, and signatures/multi-release entries are intentionally
-omitted.
+omitted. `jx export maven` writes a POM using the concrete versions from
+`jx.lock`, test scope for dev dependencies and managed entries for overrides;
+platform BOMs are inlined and an existing `pom.xml` is not overwritten unless
+`--force` is passed (ADR 0007).
 
-Not yet usable (they report their milestone): `export maven` (remaining M5),
-jlink images (M6), import (M7), annotation processors (deferred from M4), and
-a separate `update` command (`jx lock` re-resolves wanted prefixes today).
+Not yet usable (they report their milestone): jlink images (M6), import (M7),
+annotation processors (deferred from M4), and a separate `update` command
+(`jx lock` re-resolves wanted prefixes today).
 
 ## Repository
 
 * [docs/README.md](docs/README.md) — documentation index, layout, roadmap
 * [docs/decisions/](docs/decisions/) — architectural decision records
 * [docs/exit-codes.md](docs/exit-codes.md) — the exit-code contract
+* [docs/decisions/0007-maven-export.md](docs/decisions/0007-maven-export.md) — what `jx export maven` reproduces
 * [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — what does not work yet
 
 ## Licence

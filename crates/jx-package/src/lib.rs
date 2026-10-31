@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use jx_common::error::{JxError, Kind};
 
+pub mod maven;
+
 /// Thin jar + `dist/lib`, or one merged fat jar.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PackageMode {

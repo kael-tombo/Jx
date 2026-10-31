@@ -40,9 +40,10 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M5 (packaging). Live: jx jdk <command>, jx new/init, jx add/remove, \
-jx lock/fetch, jx tree/why, jx build/test/run/package and jx doctor. Jlink \
-images, full distribution trimming and Maven/Gradle interop are still ahead."
+small manifest.\n\nStatus: M5 (packaging and Maven export). Live: jx jdk <command>, \
+jx new/init, jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package, \
+jx export maven and jx doctor. Jlink images, Maven/Gradle import and Gradle \
+export are still ahead."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -136,7 +137,7 @@ enum Command {
     /// Manage JDK installations under ~/.jx/jdks
     #[command(subcommand)]
     Jdk(JdkCommand),
-    /// Write an equivalent Maven or Gradle build (planned M5/M7)
+    /// Write an equivalent Maven or Gradle build (Maven now; Gradle M7)
     #[command(subcommand)]
     Export(ExportCommand),
     /// Check jx's environment: home, cache, network, Java, disk
@@ -160,8 +161,15 @@ enum JdkCommand {
 
 #[derive(Subcommand)]
 enum ExportCommand {
-    /// Write an equivalent pom.xml (planned M5)
-    Maven,
+    /// Write a pom.xml from project.toml and the locked versions
+    Maven {
+        /// Maven groupId for the generated project
+        #[arg(long, default_value = "local.jx", value_name = "ID")]
+        group_id: String,
+        /// Overwrite an existing pom.xml
+        #[arg(long)]
+        force: bool,
+    },
     /// Write build.gradle.kts and settings.gradle.kts (planned M7)
     Gradle,
 }
@@ -217,10 +225,13 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
         Command::Test => build::test(cli),
         Command::Package { fat } => build::package(cli, *fat).map(|()| ExitCode::SUCCESS),
-        Command::Export(_) => Err(unimplemented(
-            "export <maven|gradle>",
-            "M5/M7",
-            "hand-write the build meanwhile",
+        Command::Export(ExportCommand::Maven { group_id, force }) => {
+            build::export_maven(cli, group_id, *force).map(|()| ExitCode::SUCCESS)
+        }
+        Command::Export(ExportCommand::Gradle) => Err(unimplemented(
+            "export gradle",
+            "M7",
+            "hand-write the Gradle build meanwhile",
         )),
     }
 }

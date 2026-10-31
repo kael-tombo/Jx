@@ -54,7 +54,7 @@ the aligned subtree trimmed**, but any version-fork is reported:
 ### The lockfile (`jx.lock`)
 
 ```toml
-version = 1
+version = 2
 
 [jdk]
 provider = "temurin"
@@ -69,12 +69,17 @@ version = "33.4.8-jre"                        # concrete, wanted pin expanded
 sha256 = "<the fetched jar's sha256>"
 
 [[artifact]]
-group = "org.slf4j"
-artifact = "slf4j-api"
-version = "2.0.16"
-classifier = "test"                           # optional
+group = "org.junit.platform"
+artifact = "junit-platform-console-standalone"
+version = "1.11.4"
+dev = true                                    # optional; dev-only scope
 sha256 = "…"
 ```
+
+Schema version 2 adds the optional `dev` flag. Version 1 locks are still
+read and every entry is treated as a main artifact; `jx lock` rewrites them
+as version 2. The flag is omitted for main artifacts, so lock diffs stay
+small.
 
 * **Artifacts, not packages**: each listed entry is one fetchable file (the
   classifier/extension is part of the identity). POMs are not listed — they
@@ -93,7 +98,7 @@ sha256 = "…"
   hard error; a different *build* of the same feature release is allowed
   with a warning line in verbose mode only.
 * Unknown keys are diagnosed with the did-you-mean machinery (Kind::Lock);
-  `version` above 1 is refused with "the lockfile was written by a newer
+  `version` above 2 is refused with "the lockfile was written by a newer
   jx".
 
 ## Options considered
@@ -113,7 +118,8 @@ sha256 = "…"
 * `jx add`/`remove`/`fetch` operate on the manifest + lockfile pair: add
   writes the wanted pin, resolve computes artifacts, fetch materializes the
   cache, build/run/test use the lock's sha256s for their classpath without
-  the network (the M3 "lock fast path").
+  the network (the M3 "lock fast path"). Since M4 the `dev` flag keeps
+  dev-only artifacts off javac's and java's main classpath."
 * Version changes upstream (a repo publishes a higher `33.x` release) do
   NOT disturb an existing lockfile: concrete versions update only on an
   explicit re-resolve (`jx lock`, or the lock that `jx add`/`jx remove`

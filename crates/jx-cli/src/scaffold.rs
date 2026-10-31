@@ -10,7 +10,7 @@ use jx_toolchain as toolchain;
 /// File contents for a plain application entry point.
 const APP_MAIN: &str = "package app;\n\npublic class App {\n    public static void main(String[] args) {\n        System.out.println(\"Hello, jx!\");\n    }\n}\n";
 
-/// Sample library class + JUnit 5 test for `--lib` (tests run in M4).
+/// Sample library class + JUnit 5 test for `--lib` (`jx test` runs it).
 const LIB_CLASS: &str = "package app;\n\npublic class Lib {\n    public static int add(int a, int b) {\n        return a + b;\n    }\n}\n";
 const LIB_TEST: &str = "package app;\n\nimport static org.junit.jupiter.api.Assertions.assertEquals;\n\nimport org.junit.jupiter.api.Test;\n\nclass LibTest {\n    @Test\n    void addsTwoNumbers() {\n        assertEquals(2, Lib.add(1, 1));\n    }\n}\n";
 
@@ -21,9 +21,10 @@ fn manifest_for(name: &str, version: &str, lib: bool) -> String {
         "# jx manifest: see docs/manifest.md\n\n[project]\nname = \"{name}\"\nversion = \"{version}\"\njdk = \"{}\"\n",
         toolchain::DEFAULT_FEATURE
     );
-    t.push_str("\n[run]\nmain = \"app.App\"\n");
     if lib {
-        t.push_str("\n[dev-dependencies]\njunit = \"org.junit.jupiter:junit-jupiter:5\"\n");
+        t.push_str("\n[dev-dependencies]\njunit = \"org.junit.platform:junit-platform-console-standalone:1\"\n");
+    } else {
+        t.push_str("\n[run]\nmain = \"app.App\"\n");
     }
     t
 }
@@ -146,7 +147,7 @@ pub fn new_project(name: &str, lib: bool) -> Result<std::process::ExitCode, JxEr
         kind = if lib { "library" } else { "app" }
     );
     println!("  cd {name}");
-    println!("  jx run");
+    println!("  {}", if lib { "jx test" } else { "jx run" });
     Ok(std::process::ExitCode::SUCCESS)
 }
 
@@ -204,7 +205,11 @@ mod tests {
         assert!(project.join("src/main/java/app/Lib.java").is_file());
         assert!(project.join("src/test/java/app/LibTest.java").is_file());
         let manifest = std::fs::read_to_string(project.join("project.toml")).unwrap();
-        assert!(manifest.contains("junit"));
+        assert!(
+            manifest.contains("org.junit.platform:junit-platform-console-standalone"),
+            "{manifest}"
+        );
+        assert!(!manifest.contains("[run]"), "a library has no main class");
     }
 
     #[test]

@@ -540,3 +540,77 @@ fn test_and_optional_transitives_are_skipped_by_name() {
     );
     assert_eq!(resolution.skipped.len(), 2, "both skips named");
 }
+
+/// A dev root and its exclusives are dev; anything a main root also reaches
+/// stays main, so the main classpath keeps the shared artifact.
+#[test]
+fn dev_scope_is_marked_and_shared_artifacts_stay_main() {
+    let specs = vec![
+        (
+            "ut/app/1.0/app-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(r#"
+  <groupId>ut</groupId>
+  <artifactId>app</artifactId>
+  <version>1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>shared</artifactId>
+      <version>1.0</version>
+    </dependency>
+  </dependencies>"#)),
+        ),
+        (
+            "ut/testlib/1.0/testlib-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(r#"
+  <groupId>ut</groupId>
+  <artifactId>testlib</artifactId>
+  <version>1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>shared</artifactId>
+      <version>1.0</version>
+    </dependency>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>devonly</artifactId>
+      <version>1.0</version>
+    </dependency>
+  </dependencies>"#)),
+        ),
+        (
+            "ut/shared/1.0/shared-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>shared</artifactId>\n  <version>1.0</version>",
+            )),
+        ),
+        (
+            "ut/devonly/1.0/devonly-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>devonly</artifactId>\n  <version>1.0</version>",
+            )),
+        ),
+    ];
+    let harness = Harness::serve(specs);
+    let resolution = resolve(
+        &harness.loader(),
+        &harness.client,
+        &[dep("app", "ut:app:=1.0")],
+        &[dep("testlib", "ut:testlib:=1.0")],
+        &[],
+    )
+    .expect("resolved");
+    let flag = |artifact: &str| {
+        resolution
+            .nodes
+            .iter()
+            .find(|n| n.artifact_id == artifact)
+            .unwrap_or_else(|| panic!("{artifact} is in the graph"))
+            .dev
+    };
+    assert!(!flag("app"));
+    assert!(flag("testlib"));
+    assert!(flag("devonly"));
+    assert!(!flag("shared"), "a main path makes the artifact main");
+}

@@ -40,9 +40,9 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M3 (dependency resolution and lockfile). Live: jx jdk <command>, \
-jx new/init, jx add/remove, jx lock/fetch, jx tree/why, jx build/run and jx doctor. \
-Full packaging lands in M5 and Maven/Gradle interop in M7."
+small manifest.\n\nStatus: M4 (build, test and run). Live: jx jdk <command>, jx new/init, \
+jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run and jx doctor. \
+Packaging lands in M5 and Maven/Gradle interop in M7."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -123,7 +123,7 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-    /// Compile and run tests (planned M4)
+    /// Compile main and test sources, then run JUnit 5
     Test,
     /// Remove target/
     Clean,
@@ -209,11 +209,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Fetch => deps::fetch(cli).map(|()| ExitCode::SUCCESS),
         Command::Tree => deps::tree(cli).map(|()| ExitCode::SUCCESS),
         Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
-        Command::Test => Err(unimplemented(
-            "test",
-            "M4",
-            "run a main class with a JUnit runner, or use Maven/Gradle",
-        )),
+        Command::Test => build::test(cli),
         Command::Export(_) => Err(unimplemented(
             "export <maven|gradle>",
             "M5/M7",

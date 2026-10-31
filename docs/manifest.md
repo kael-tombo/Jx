@@ -18,9 +18,10 @@ jackson-bom = { platform = "com.fasterxml.jackson:jackson-bom:2.18.0" }
 jackson-databind = "com.fasterxml.jackson.core:jackson-databind" # version from platform
 
 [dev-dependencies]                         # parsed, validated and resolved
-junit = "org.junit.jupiter:junit-jupiter:5"
+junit = "org.junit.platform:junit-platform-console-standalone:1"
+                                           # jx test's launcher; bundles Jupiter
 
-[processors]                               # planned (M4): annotation processors
+[processors]                               # planned (deferred from M4): annotation processors
 mapstruct = "org.mapstruct:mapstruct-processor:1"
 
 [overrides]                                # parsed & validated; applied by the resolver
@@ -67,8 +68,10 @@ engine = "maven"
   manifest parse time: coordinate shape (`group:artifact[:version]
   [:classifier]`), version charset, SNAPSHOT rejection, `=` exact pins and
   `{ platform = … }` BOM entries; a table may not name the same
-  `group:artifact` twice. The resolver then expands each wanted version and
-  `jx build`/`run` put the locked jars on javac's and java's classpath.
+  `group:artifact` twice. The resolver then expands each wanted version.
+  `[dependencies]` reach the main compile/run classpath; `[dev-dependencies]`
+  reach test compilation and `jx test` only. An artifact shared by both
+  scopes counts as main.
 * `[overrides]` entries are parsed and validated the same way (quoted
   `group:artifact` keys, version values, no duplicates, no SNAPSHOTs;
   a leading `=` is allowed but optional — override values pin either way).

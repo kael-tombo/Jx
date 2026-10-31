@@ -3,16 +3,18 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M3 done; M4 next)
+## Current (M4 done; M5 next)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
-`jx why`, `jx build`, `jx run`, `jx clean`. M2 delivered the repository
-client (fetch with always-on checksum verification, mirrors, proxies, auth
-references, content cache), POM/`maven-metadata.xml` models, Maven version
-ordering and the effective-POM loader. M3 added the resolver, the lockfile,
-the six dependency commands, and the lock fast path that puts cached jars on
-javac's and java's classpath.
+`jx why`, `jx build`, `jx test`, `jx run`, `jx clean`. M2 delivered the
+repository client (fetch with always-on checksum verification, mirrors,
+proxies, auth references, content cache), POM/`maven-metadata.xml` models,
+Maven version ordering and the effective-POM loader. M3 added the resolver,
+the lockfile, the six dependency commands, and the lock fast path that puts
+cached jars on javac's and java's classpath. M4 added fingerprint-skipped
+javac builds, separate main/test dependency classpaths, test compilation and
+JUnit 5 execution.
 
 ### Manifest
 
@@ -45,9 +47,11 @@ javac's and java's classpath.
   lockfile pins bytes, which re-resolving snapshot builds cannot satisfy.
 - **POM-declared `<repositories>` are parsed but deliberately not fetched
   from** — `config.toml` is the only trust anchor in V1.
-- **The graph is flat for the JVM**: `jx build`/`run` put every locked
-  artifact on one classpath, including `[dev-dependencies]`; compile/test/
-  runtime scope separation is M4 work.
+- **Main and test scopes are separated** for compiling and running: main
+  code receives only main artifacts, tests receive main plus
+  `[dev-dependencies]`. There is no separate runtime versus compile scope
+  yet — Maven's `provided`/`runtime` scopes are not represented in the
+  manifest.
 - **Artifacts are assumed to be jars.** POM dependencies with a non-jar
   `type` (AAR, test-jar, …) are fetched at the `.jar` path today; the
   manifest grammar has no `type` field in V1.
@@ -98,6 +102,29 @@ javac's and java's classpath.
 - **POM repositories are parsed but not fetched from** — V1 merges and
   diagnoses them, but `config.toml` remains the only trust anchor (ADR 0003).
 
+### Build and test (M4)
+
+- **Compilation is whole-source-set, not per-file.** When anything in a
+  command's fingerprint changes, every source in that set is recompiled and
+  the output directory is cleared first, so deleted sources cannot leave
+  stale classes. An unchanged main build skips javac entirely; unchanged
+  test sources skip test compilation only when the main build also skipped.
+- **Annotation processors are not supported yet.** `[processors]` remains a
+  planned manifest table; `javac` runs without `-processorpath` or
+  `-processor` flags. This is the part of M4 still open.
+- **`jx test` requires the JUnit Platform console standalone on the test
+  classpath.** It is usually added with
+  `jx add --dev org.junit.platform:junit-platform-console-standalone`. The
+  command scans the test classes and propagates the launcher's exit code;
+  there are no test filters, JUnit configuration flags or Surefire XML
+  reports yet.
+- **Test resources** under `src/test/resources` are copied into
+  `target/test-classes`, matching the main-resource rule.
+- **Build fingerprints are local, not remote.** A fresh checkout or a
+  `jx clean` recompiles; jx does not share compilation outputs between
+  machines.
+- **`jx build` does not produce a jar**; packaging is M5.
+
 ### Toolchain (from M1)
 
 - **The JDK provider is Eclipse Temurin over the Adoptium API only.** Other
@@ -105,8 +132,9 @@ javac's and java's classpath.
 - **JDK archives download with only the API-provided sha256 as
   verification**; GPG signing is part of the M8 security checklist.
 - **`--offline` refuses a missing pinned JDK** with a clear error.
-- **`jx test` is still a stub** naming M4; builds are not incremental yet,
-  though locked dependencies now reach the compile and run classpath.
+- **`jx run` and `jx test` share the pinned JDK**; locked dependencies now
+  reach both classpaths, but `jx lock` does not write the `[jdk]` pin yet —
+  it only preserves an existing hand-written entry.
 
 ### Doctor, config, cache
 

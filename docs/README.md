@@ -24,6 +24,10 @@ planned for later milestones:
 * `docs/quickstart.md` — the executed-in-CI quickstart
 * `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
 
+M4 behaviour is described in the README quickstart and
+[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md); no separate build/test guide is
+written yet.
+
 ## Workspace layout
 
 ```text
@@ -55,7 +59,7 @@ milestones; nothing in this repository claims to support them yet.
 | M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | **done** |
 | M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | done |
 | M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
-| M4 | javac integration, fingerprint skip, resources, processors, JUnit launcher | not started |
+| M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | not started |
 | M6 | Runtime trimming: jdeps + jlink with fallback | not started |
 | M7 | Maven and Gradle interop: import, compatibility, delegate, exports | not started |

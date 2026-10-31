@@ -36,6 +36,9 @@ pub struct SolvedNode {
     pub classifier: Option<String>,
     /// Edges from the manifest root; direct dependencies are depth 1.
     pub depth: u32,
+    /// Reachable only through `[dev-dependencies]`. Shared artifacts that a
+    /// main dependency also needs are not dev.
+    pub dev: bool,
 }
 
 /// A version fork the nearest-wins rule decided, kept visible (ADR 0004: a
@@ -75,6 +78,9 @@ pub struct Edge {
     pub version: String,
     /// Edges from a manifest root are depth 1.
     pub depth: u32,
+    /// `true` only on a root edge declared in `[dev-dependencies]`;
+    /// transitive edges carry `false` and inherit scope from their root.
+    pub dev: bool,
 }
 
 impl Edge {
@@ -208,7 +214,11 @@ pub fn resolve(
         ..Resolution::default()
     };
     let mut queue: VecDeque<Entry> = VecDeque::new();
-    for spec in dependencies.iter().chain(dev_dependencies.iter()) {
+    for (spec, dev) in dependencies
+        .iter()
+        .map(|spec| (spec, false))
+        .chain(dev_dependencies.iter().map(|spec| (spec, true)))
+    {
         if spec.platform {
             continue;
         }
@@ -232,6 +242,7 @@ pub fn resolve(
             classifier: spec.classifier.clone(),
             version: version.clone(),
             depth: 1,
+            dev,
         });
         queue.push_back(Entry {
             coord: Coordinate {
@@ -306,6 +317,8 @@ pub fn resolve(
                 version: version.clone(),
                 classifier: entry.coord.classifier.clone(),
                 depth: entry.depth,
+                // Filled in after the walk from the root scopes.
+                dev: false,
             },
         );
 
@@ -402,6 +415,7 @@ pub fn resolve(
                 classifier: dep.classifier.clone(),
                 version: dep_version.clone(),
                 depth: entry.depth + 1,
+                dev: false,
             });
             queue.push_back(Entry {
                 coord: Coordinate {
@@ -421,6 +435,7 @@ pub fn resolve(
     }
 
     resolution.nodes.extend(solved.into_values());
+    mark_dev_nodes(&mut resolution);
     resolution.nodes.sort_by(|a, b| {
         (&a.group_id, &a.artifact_id, &a.classifier, &a.version).cmp(&(
             &b.group_id,
@@ -430,6 +445,40 @@ pub fn resolve(
         ))
     });
     Ok(resolution)
+}
+
+/// Mark every node reachable only from `[dev-dependencies]` roots. The
+/// distinction decides which jars javac sees for main sources; it is derived
+/// from the edges after solving, so an artifact shared by main and dev paths
+/// correctly counts as main.
+fn mark_dev_nodes(resolution: &mut Resolution) {
+    let mut children: HashMap<String, Vec<String>> = HashMap::new();
+    let mut frontier = VecDeque::new();
+    let mut main = HashSet::new();
+    for edge in &resolution.edges {
+        match &edge.parent {
+            Some(parent) => children.entry(parent.clone()).or_default().push(edge.key()),
+            None if !edge.dev => {
+                let child = edge.key();
+                if main.insert(child.clone()) {
+                    frontier.push_back(child);
+                }
+            }
+            None => {}
+        }
+    }
+    while let Some(parent) = frontier.pop_front() {
+        if let Some(next) = children.get(&parent) {
+            for child in next {
+                if main.insert(child.clone()) {
+                    frontier.push_back(child.clone());
+                }
+            }
+        }
+    }
+    for node in &mut resolution.nodes {
+        node.dev = !main.contains(&node.key());
+    }
 }
 
 /// Expand one wanted pin to a concrete version: exact pins pass through

@@ -1,6 +1,6 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M3 done; M4 next).** This README describes the
+> **Status: under construction (M4 done; M5 next).** This README describes the
 > intent of the project, not yet its shipped abilities; see
 > [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
@@ -49,13 +49,21 @@ jx lock              # resolve and record exact versions + sha256
 jx fetch             # download/verify exactly what jx.lock pins
 jx run               # javac and java get the locked jars on their classpath
 
+# Tests
+jx add --dev org.junit.platform:junit-platform-console-standalone
+jx test              # compile src/test/java and run JUnit 5
+
 jx jdk list          # jx-managed JDKs live in ~/.jx/jdks, never near system Java
 jx doctor            # diagnose jx's home, cache, network, system Java, disk
 ```
 
-Not yet usable (they report their milestone): test (M4), export (M5/M7),
-import (M7), and a separate `update` command (`jx lock` re-resolves wanted
-prefixes today).
+Builds skip javac when sources and the classpath are unchanged. Test sources
+are compiled against the main classes plus dev dependencies, and the JUnit
+launcher runs only that test classpath.
+
+Not yet usable (they report their milestone): export (M5/M7), import (M7),
+annotation processors (deferred from M4), and a separate `update` command
+(`jx lock` re-resolves wanted prefixes today).
 
 ## Repository
 

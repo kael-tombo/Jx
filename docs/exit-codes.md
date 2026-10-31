@@ -6,15 +6,21 @@ Every jx command exits with a code a script can rely on.
 | --- | --- | --- |
 | 0 | Success. Warnings do not change the exit code (`jx doctor` exits 1 only when a check cannot run). | — |
 | 1 | A diagnosed failure (io, network, toolchain, manifest, lock, resolve, build). | error kinds other than `usage` |
-| 2 | Bad usage: unknown flag, unparseable arguments, or a command jx does not yet implement. | `usage` |
+| 2 | Bad usage: unknown flag, unparseable arguments, or a command jx does not yet implement; `jx test` also uses 2 when no tests are found. | `usage`; JUnit console no-tests |
 
 Notes:
 
 * `jx doctor` exits 0 when it completes, even with warnings; exits 1 only when
   a check itself cannot complete.
+* `jx test` propagates the JUnit Platform console launcher's exit code:
+  0 when every test passes, 1 when the suite has failures, and 2 when no
+  tests are found (`--fail-if-no-tests`). jx's own failures (missing JDK,
+  compile error, missing launcher) use the normal 1/2 codes above.
 * The global `--locked` flag makes `jx lock`, `jx add`, `jx remove` and the
   build fast path fail with a diagnosed `lock` error when the lockfile is
   missing or would change. That is its contract, not an internal failure;
   the exit code is still 1 like any other diagnosed error.
-* Exit codes 2 and above always accompany a rendered `error:` message in the
-  documented format: `error [kind]: message` with `at:` and `hint:` lines.
+* jx's own exit codes 2 and above always accompany a rendered `error:`
+  message in the documented format: `error [kind]: message` with `at:` and
+  `hint:` lines. `jx test`'s propagated launcher result is test output, not
+  a jx error, and may carry no such line.

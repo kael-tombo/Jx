@@ -15,12 +15,20 @@ use std::path::Path;
 use jx_common::diagnose::unknown_key_error;
 use jx_common::error::{JxError, Kind};
 
-/// The only schema version jx understands today.
-const SCHEMA_VERSION: u32 = 1;
+/// The newest schema jx writes. Version 1 locks are still read (every entry
+/// counts as a main artifact); version 2 adds the optional `dev` flag.
+const SCHEMA_VERSION: u32 = 2;
 
 const LOCK_KEYS: [&str; 3] = ["artifact", "jdk", "version"];
 const JDK_KEYS: [&str; 4] = ["feature", "provider", "release", "sha256"];
-const ARTIFACT_KEYS: [&str; 5] = ["artifact", "classifier", "group", "sha256", "version"];
+const ARTIFACT_KEYS: [&str; 6] = [
+    "artifact",
+    "classifier",
+    "dev",
+    "group",
+    "sha256",
+    "version",
+];
 
 /// The exact toolchain build the lock was produced with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +52,9 @@ pub struct PinnedArtifact {
     pub classifier: Option<String>,
     /// sha256 of the artifact bytes, the content-cache key.
     pub sha256: String,
+    /// Reachable only through `[dev-dependencies]`; kept out of the main
+    /// compile/run classpath. Omitted (false) for main and for v1 locks.
+    pub dev: bool,
 }
 
 impl PinnedArtifact {
@@ -138,7 +149,9 @@ pub fn parse(raw: &str) -> Result<Lockfile, JxError> {
         Some(v) if v > i64::from(SCHEMA_VERSION) => {
             return Err(JxError::new(
                 Kind::Lock,
-                format!("this jx understands jx.lock version {SCHEMA_VERSION}, the file says {v}"),
+                format!(
+                    "this jx understands jx.lock versions 1 through {SCHEMA_VERSION}, the file says {v}"
+                ),
             )
             .hint(
                 "the lockfile was written by a newer jx; upgrade jx (or delete jx.lock and re-resolve)",
@@ -253,6 +266,7 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
     let mut version: Option<String> = None;
     let mut classifier: Option<Option<String>> = None;
     let mut sha256: Option<String> = None;
+    let mut dev = false;
     for (key, value) in table {
         match key.as_str() {
             "group" => group = Some(string_field(key, value)?),
@@ -260,6 +274,11 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
             "version" => version = Some(string_field(key, value)?),
             "classifier" => classifier = Some(string_field(key, value).map(Some)?),
             "sha256" => sha256 = Some(checksum(key, value)?),
+            "dev" => {
+                dev = value.as_bool().ok_or_else(|| {
+                    JxError::new(Kind::Lock, "`dev` in jx.lock must be `true` or `false`")
+                })?
+            }
             other => {
                 return Err(unknown_key_error(
                     Kind::Lock,
@@ -301,6 +320,7 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
         version,
         classifier: classifier.flatten(),
         sha256,
+        dev,
     })
 }
 
@@ -361,6 +381,9 @@ pub fn to_canonical_text(lock: &Lockfile) -> String {
         out.push_str(&format!("version = {}\n", quote(&artifact.version)));
         if let Some(classifier) = &artifact.classifier {
             out.push_str(&format!("classifier = {}\n", quote(classifier)));
+        }
+        if artifact.dev {
+            out.push_str("dev = true\n");
         }
         out.push_str(&format!("sha256 = {}\n", quote(&artifact.sha256)));
     }
@@ -449,6 +472,10 @@ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n"
     fn parses_and_canonicalises() {
         let lock = parse(SAMPLE).expect("parsed");
         assert_eq!(lock.version, 1);
+        assert!(
+            lock.artifacts.iter().all(|artifact| !artifact.dev),
+            "a v1 lock has no scope information; everything is main"
+        );
         let jdk = lock.jdk.as_ref().expect("jdk entry");
         assert_eq!(jdk.provider, "temurin");
         assert_eq!(jdk.feature, 25);
@@ -507,9 +534,9 @@ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n"
 
     #[test]
     fn newer_schema_versions_are_refused() {
-        let raw = SAMPLE.replace("version = 1", "version = 2");
+        let raw = SAMPLE.replace("version = 1", "version = 3");
         let error = parse(&raw).expect_err("newer schema");
-        assert!(error.message.contains("version 1"), "{error}");
+        assert!(error.message.contains("versions 1 through 2"), "{error}");
         assert!(
             error
                 .hint
@@ -517,6 +544,31 @@ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n"
                 .is_some_and(|hint| hint.contains("newer jx")),
             "{error}"
         );
+    }
+
+    #[test]
+    fn version_two_dev_flags_round_trip() {
+        let raw = "version = 2\n\
+\n\
+[[artifact]]\n\
+ group = \"g\"\n\
+ artifact = \"main\"\n\
+ version = \"1\"\n\
+ sha256 = \"1111111111111111111111111111111111111111111111111111111111111111\"\n\
+\n\
+[[artifact]]\n\
+ group = \"g\"\n\
+ artifact = \"test-only\"\n\
+ version = \"2\"\n\
+ dev = true\n\
+ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n";
+        let lock = parse(raw).expect("parsed v2");
+        assert_eq!(lock.version, 2);
+        assert!(lock.find("g", "main", None).is_some_and(|a| !a.dev));
+        assert!(lock.find("g", "test-only", None).is_some_and(|a| a.dev));
+        let text = to_canonical_text(&lock);
+        assert!(text.contains("dev = true"), "{text}");
+        assert_eq!(parse(&text).expect("reparsed"), lock);
     }
 
     #[test]

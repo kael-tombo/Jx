@@ -19,6 +19,15 @@ use jx_resolve::{Edge, Resolution, SolvedNode};
 
 use crate::Cli;
 
+/// The locked jars a build needs. `main` excludes artifacts reachable only
+/// through `[dev-dependencies]`; `test` contains everything.
+pub(crate) struct Classpaths {
+    pub main: Vec<PathBuf>,
+    pub test: Vec<PathBuf>,
+    /// The JUnit Platform console standalone jar, when the project depends on it.
+    pub junit_launcher: Option<PathBuf>,
+}
+
 struct Project {
     manifest_path: PathBuf,
     manifest_dir: PathBuf,
@@ -322,10 +331,10 @@ fn latest_version(client: &Client, spec: &DependencySpec) -> Result<String, JxEr
     })
 }
 
-/// The classpath javac/java should use. This is the lock fast path: an
+/// The classpaths javac/java should use. This is the lock fast path: an
 /// existing lock is served from the cache; a missing or older-than-manifest
 /// lock is refreshed first. Returns absolute cache paths, never jar bytes.
-pub(crate) fn classpath(cli: &Cli) -> Result<Vec<PathBuf>, JxError> {
+pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
     let project = Project::open(cli)?;
     let declared = !project.manifest.dependencies.is_empty()
         || !project.manifest.dev_dependencies.is_empty()
@@ -333,7 +342,11 @@ pub(crate) fn classpath(cli: &Cli) -> Result<Vec<PathBuf>, JxError> {
     let lock_path = project.lock_path();
     if !lock_path.exists() {
         if !declared {
-            return Ok(Vec::new());
+            return Ok(Classpaths {
+                main: Vec::new(),
+                test: Vec::new(),
+                junit_launcher: None,
+            });
         }
         if cli.locked {
             return Err(JxError::new(
@@ -365,11 +378,32 @@ pub(crate) fn classpath(cli: &Cli) -> Result<Vec<PathBuf>, JxError> {
             if downloaded == 1 { "" } else { "s" }
         );
     }
-    let cache = jx_common::cache::Cache::new(&project.home);
-    lock.artifacts
-        .iter()
-        .map(|artifact| cache.path_of(&artifact.sha256))
-        .collect()
+    classpaths_from_lock(&lock, &project.home)
+}
+
+/// Turn a verified lock into the two classpaths a build uses. Main artifacts
+/// reach javac and `java`; dev-only artifacts and the JUnit launcher stay on
+/// the test side.
+fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxError> {
+    let cache = jx_common::cache::Cache::new(home);
+    let mut main = Vec::new();
+    let mut test = Vec::new();
+    let mut junit_launcher = None;
+    for artifact in &lock.artifacts {
+        let path = cache.path_of(&artifact.sha256)?;
+        if !artifact.dev {
+            main.push(path.clone());
+        }
+        if artifact.artifact_id == "junit-platform-console-standalone" {
+            junit_launcher = Some(path.clone());
+        }
+        test.push(path);
+    }
+    Ok(Classpaths {
+        main,
+        test,
+        junit_launcher,
+    })
 }
 
 fn manifest_is_newer(project: &Project) -> bool {
@@ -489,7 +523,7 @@ fn build_lock(project: &Project, resolution: &Resolution) -> Result<Lockfile, Jx
         }
     }
     Ok(Lockfile {
-        version: 1,
+        version: 2,
         jdk: existing.and_then(|lock| lock.jdk),
         artifacts,
     })
@@ -512,6 +546,7 @@ fn pinned(node: &SolvedNode, sha256: String) -> PinnedArtifact {
         version: node.version.clone(),
         classifier: node.classifier.clone(),
         sha256,
+        dev: node.dev,
     }
 }
 
@@ -874,4 +909,44 @@ fn why_in(
         if path.len() == 1 { "" } else { "s" }
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jx_common::cache::Cache;
+    use tempfile::tempdir;
+
+    #[test]
+    fn lock_scope_splits_main_from_test_classpaths() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::new(dir.path());
+        let main_sha = cache.put(b"main jar").unwrap();
+        let dev_sha = cache.put(b"dev jar").unwrap();
+        let launcher_sha = cache.put(b"junit console").unwrap();
+        let artifact = |name: &str, sha: &str, dev: bool| PinnedArtifact {
+            group_id: "g".to_string(),
+            artifact_id: name.to_string(),
+            version: "1.0".to_string(),
+            classifier: None,
+            sha256: sha.to_string(),
+            dev,
+        };
+        let lock = Lockfile {
+            version: 2,
+            jdk: None,
+            artifacts: vec![
+                artifact("main", &main_sha, false),
+                artifact("test-only", &dev_sha, true),
+                artifact("junit-platform-console-standalone", &launcher_sha, true),
+            ],
+        };
+        let cp = classpaths_from_lock(&lock, dir.path()).unwrap();
+        assert_eq!(cp.main, vec![cache.path_of(&main_sha).unwrap()]);
+        assert_eq!(cp.test.len(), 3);
+        assert_eq!(
+            cp.junit_launcher,
+            Some(cache.path_of(&launcher_sha).unwrap())
+        );
+    }
 }

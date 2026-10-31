@@ -81,6 +81,7 @@ engine = "maven"
   dependency tables: only the added/removed entry line changes, every other
   byte (comments, blank lines, CRLF endings) survives. A failed resolve
   restores the manifest unchanged.
-* Packaging uses `name` and `version` for `target/dist/<name>-<version>.jar`;
-  `[run] main`, when present, becomes the jar's `Main-Class`. Without a pin,
-  jx discovers a single main class and refuses to guess between several.
+* Packaging uses `name` and `version` for `target/dist/<name>-<version>.jar`
+  (or `<name>-<version>-all.jar` with `--fat`); `[run] main`, when present,
+  becomes the jar's `Main-Class`. Without a pin, jx discovers a single main
+  class and refuses to guess between several.

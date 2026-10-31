@@ -1,26 +1,36 @@
-//! Packaging: a runnable thin jar and a portable `dist/` directory.
+//! Packaging: a portable thin `dist/` directory and an opt-in fat jar.
 //!
-//! The jar contains the project's own classes and resources. Dependencies are
-//! copied below `dist/lib/<group path>/` and referenced from the manifest's
-//! `Class-Path`, so `java -jar dist/<name>-<version>.jar` works after moving
-//! the whole `dist/` tree. Fat/shaded jars are not produced here.
+//! Thin: the project jar contains only project classes and resources;
+//! dependencies are copied below `dist/lib/<group path>/` and referenced from
+//! the manifest's `Class-Path`, so the whole `dist/` tree is portable.
+//! Fat: dependency classes/resources are merged into one jar with explicit
+//! duplicate, service-file, signature and multi-release rules.
 
-use std::io::Write as _;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use jx_common::error::{JxError, Kind};
 
-/// One dependency to copy into `dist/lib`.
+/// Thin jar + `dist/lib`, or one merged fat jar.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PackageMode {
+    Thin,
+    Fat,
+}
+
+/// One dependency to copy into `dist/lib` (thin) or merge (fat).
 pub struct DependencyJar<'a> {
     /// Forward-slash relative path below the dist directory, e.g.
-    /// `lib/com/google/guava/guava-33.4.8-jre.jar`.
+    /// `lib/com/google/guava/guava-33.4.8-jre.jar`. Ignored for fat jars.
     pub relative_path: &'a str,
     pub source: &'a Path,
 }
 
 /// Everything one `jx package` needs.
 pub struct PackageRequest<'a> {
-    /// Destination directory; replaced atomically enough for a build tree.
+    pub mode: PackageMode,
+    /// Destination directory; replaced on every package.
     pub dist_dir: &'a Path,
     pub classes_dir: &'a Path,
     pub jar_name: &'a str,
@@ -28,33 +38,60 @@ pub struct PackageRequest<'a> {
     pub dependencies: &'a [DependencyJar<'a>],
 }
 
-/// Where the package landed and how many dependency jars it included.
+/// Where the package landed and what the merge had to handle.
 pub struct PackageOutput {
     pub jar: PathBuf,
-    pub lib_dir: PathBuf,
+    /// `Some` for a thin package; `None` for a fat jar.
+    pub lib_dir: Option<PathBuf>,
     pub dependency_count: usize,
+    /// Fat jar only: entries dropped because a project/earlier artifact won.
+    pub duplicate_entries: usize,
+    /// Fat jar only: `META-INF/versions/` (multi-release) entries skipped.
+    pub versioned_entries: usize,
+    /// Fat jar only: absolute/traversing entry names refused.
+    pub unsafe_entries: usize,
 }
 
-/// Build `dist_dir` from scratch: copy dependencies, write the project jar
-/// with a `Main-Class`/`Class-Path` manifest. Returns the created paths.
+/// Build `dist_dir` from scratch, using the requested packaging mode.
 pub fn package(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
     validate_file_name(request.jar_name)?;
     if let Some(main) = request.main_class {
         validate_manifest_value("Main-Class", main)?;
     }
+    if request.mode == PackageMode::Thin {
+        for dependency in request.dependencies {
+            validate_relative_path(dependency.relative_path)?;
+        }
+    }
+    reset_dist(request.dist_dir)?;
+    std::fs::create_dir_all(request.dist_dir).map_err(|e| {
+        JxError::new(Kind::Io, "cannot create the dist directory")
+            .at(request.dist_dir.display().to_string())
+            .caused_by(e)
+    })?;
+    match request.mode {
+        PackageMode::Thin => package_thin(request),
+        PackageMode::Fat => package_fat(request),
+    }
+}
+
+fn reset_dist(dist: &Path) -> Result<(), JxError> {
+    if dist.exists() {
+        std::fs::remove_dir_all(dist).map_err(|e| {
+            JxError::new(Kind::Io, "cannot clear the previous dist directory")
+                .at(dist.display().to_string())
+                .caused_by(e)
+                .hint("close any running program that holds files under target/dist")
+        })?;
+    }
+    Ok(())
+}
+
+fn package_thin(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
     let mut class_path = Vec::with_capacity(request.dependencies.len());
     for dependency in request.dependencies {
         validate_relative_path(dependency.relative_path)?;
         class_path.push(dependency.relative_path.to_string());
-    }
-
-    if request.dist_dir.exists() {
-        std::fs::remove_dir_all(request.dist_dir).map_err(|e| {
-            JxError::new(Kind::Io, "cannot clear the previous dist directory")
-                .at(request.dist_dir.display().to_string())
-                .caused_by(e)
-                .hint("close any running program that holds files under target/dist")
-        })?;
     }
     let lib_dir = request.dist_dir.join("lib");
     std::fs::create_dir_all(&lib_dir).map_err(|e| {
@@ -81,7 +118,6 @@ pub fn package(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
                 .caused_by(e)
         })?;
     }
-
     let jar_path = request.dist_dir.join(request.jar_name);
     write_jar(
         &jar_path,
@@ -91,8 +127,31 @@ pub fn package(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
     )?;
     Ok(PackageOutput {
         jar: jar_path,
-        lib_dir,
+        lib_dir: Some(lib_dir),
         dependency_count: request.dependencies.len(),
+        duplicate_entries: 0,
+        versioned_entries: 0,
+        unsafe_entries: 0,
+    })
+}
+
+fn package_fat(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
+    let jar_path = request.dist_dir.join(request.jar_name);
+    let mut stats = FatStats::default();
+    write_fat_jar(
+        &jar_path,
+        request.classes_dir,
+        request.main_class,
+        request.dependencies,
+        &mut stats,
+    )?;
+    Ok(PackageOutput {
+        jar: jar_path,
+        lib_dir: None,
+        dependency_count: request.dependencies.len(),
+        duplicate_entries: stats.duplicates,
+        versioned_entries: stats.versioned,
+        unsafe_entries: stats.unsafe_entries,
     })
 }
 
@@ -190,6 +249,191 @@ fn write_jar(
     }
     zip.finish().map_err(|e| zip_error(output, e))?;
     Ok(())
+}
+
+#[derive(Default)]
+struct FatStats {
+    duplicates: usize,
+    versioned: usize,
+    unsafe_entries: usize,
+}
+
+/// Merge project entries and dependency jars into one jar. Project entries
+/// win collisions; dependency entries follow lock order and the first one
+/// wins. Service files are merged by provider name. Signature files,
+/// `module-info.class`, `META-INF/INDEX.LIST` and multi-release entries are
+/// deliberately omitted because a merged jar invalidates their assumptions.
+fn write_fat_jar(
+    output: &Path,
+    classes_dir: &Path,
+    main_class: Option<&str>,
+    dependencies: &[DependencyJar<'_>],
+    stats: &mut FatStats,
+) -> Result<(), JxError> {
+    let manifest = manifest_text(main_class, &[])?;
+    let file = std::fs::File::create(output).map_err(|e| {
+        JxError::new(Kind::Io, "cannot create the fat jar")
+            .at(output.display().to_string())
+            .caused_by(e)
+    })?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+    zip.start_file("META-INF/MANIFEST.MF", options)
+        .map_err(|e| zip_error(output, e))?;
+    zip.write_all(manifest.as_bytes())
+        .map_err(|e| io_error("cannot write the fat jar manifest", output, e))?;
+
+    let mut seen: HashSet<String> = HashSet::new();
+    seen.insert("META-INF/MANIFEST.MF".to_string());
+    let mut services: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+
+    for source in collect_files(classes_dir)? {
+        let relative = source
+            .strip_prefix(classes_dir)
+            .expect("walked files stay under classes_dir");
+        let name = relative
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        if name.starts_with("META-INF/versions/") {
+            stats.versioned += 1;
+            continue;
+        }
+        if skip_embedded(&name) {
+            continue;
+        }
+        if let Some(service) = service_name(&name) {
+            let text = std::fs::read_to_string(&source)
+                .map_err(|e| io_error("cannot read a service descriptor", &source, e))?;
+            add_providers(service, &text, &mut services);
+            continue;
+        }
+        if !safe_entry_name(&name) {
+            stats.unsafe_entries += 1;
+            continue;
+        }
+        if !seen.insert(name.clone()) {
+            stats.duplicates += 1;
+            continue;
+        }
+        zip.start_file(&name, options)
+            .map_err(|e| zip_error(output, e))?;
+        let mut input = std::fs::File::open(&source)
+            .map_err(|e| io_error("cannot read a class for the fat jar", &source, e))?;
+        std::io::copy(&mut input, &mut zip)
+            .map_err(|e| io_error("cannot write a fat jar entry", output, e))?;
+    }
+
+    for dependency in dependencies {
+        let file = std::fs::File::open(dependency.source).map_err(|e| {
+            io_error(
+                "cannot open a dependency jar for the fat jar",
+                dependency.source,
+                e,
+            )
+        })?;
+        let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file))
+            .map_err(|e| zip_read_error(dependency.source, e))?;
+        for index in 0..archive.len() {
+            let mut entry = archive
+                .by_index(index)
+                .map_err(|e| zip_read_error(dependency.source, e))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry.name().to_string();
+            if name.starts_with("META-INF/versions/") {
+                stats.versioned += 1;
+                continue;
+            }
+            if skip_embedded(&name) {
+                continue;
+            }
+            if let Some(service) = service_name(&name) {
+                let mut text = String::new();
+                entry.read_to_string(&mut text).map_err(|e| {
+                    io_error(
+                        "cannot read a service descriptor from a dependency",
+                        dependency.source,
+                        e,
+                    )
+                })?;
+                add_providers(service, &text, &mut services);
+                continue;
+            }
+            if !safe_entry_name(&name) {
+                stats.unsafe_entries += 1;
+                continue;
+            }
+            if !seen.insert(name.clone()) {
+                stats.duplicates += 1;
+                continue;
+            }
+            zip.start_file(&name, options)
+                .map_err(|e| zip_error(output, e))?;
+            std::io::copy(&mut entry, &mut zip)
+                .map_err(|e| io_error("cannot write a fat jar entry", output, e))?;
+        }
+    }
+
+    for (service, providers) in services {
+        let name = format!("META-INF/services/{service}");
+        zip.start_file(&name, options)
+            .map_err(|e| zip_error(output, e))?;
+        for provider in providers {
+            zip.write_all(provider.as_bytes())
+                .map_err(|e| io_error("cannot write a merged service descriptor", output, e))?;
+            zip.write_all(b"\n")
+                .map_err(|e| io_error("cannot write a merged service descriptor", output, e))?;
+        }
+    }
+    zip.finish().map_err(|e| zip_error(output, e))?;
+    Ok(())
+}
+
+fn skip_embedded(name: &str) -> bool {
+    name.eq_ignore_ascii_case("META-INF/MANIFEST.MF")
+        || name.eq_ignore_ascii_case("module-info.class")
+        || name.eq_ignore_ascii_case("META-INF/INDEX.LIST")
+        || is_signature(name)
+}
+
+fn is_signature(name: &str) -> bool {
+    if !name.to_ascii_uppercase().starts_with("META-INF/") {
+        return false;
+    }
+    let upper = name.to_ascii_uppercase();
+    [".SF", ".DSA", ".RSA", ".EC"]
+        .iter()
+        .any(|extension| upper.ends_with(extension))
+}
+
+fn service_name(name: &str) -> Option<&str> {
+    name.strip_prefix("META-INF/services/")
+        .filter(|service| !service.is_empty() && !service.contains('/'))
+}
+
+fn add_providers(service: &str, text: &str, services: &mut BTreeMap<String, BTreeSet<String>>) {
+    let providers = services.entry(service.to_string()).or_default();
+    for line in text.lines() {
+        let provider = line.split('#').next().unwrap_or("").trim();
+        if !provider.is_empty() {
+            providers.insert(provider.to_string());
+        }
+    }
+}
+
+fn safe_entry_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('/')
+        && !name.contains('\\')
+        && !name.contains('\0')
+        && name
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// The manifest text, with header lines wrapped exactly as the jar format
@@ -351,6 +595,13 @@ fn zip_error(output: &Path, error: zip::result::ZipError) -> JxError {
         .caused_by(error)
 }
 
+fn zip_read_error(source: &Path, error: zip::result::ZipError) -> JxError {
+    JxError::new(Kind::Build, "cannot read a dependency jar for the fat jar")
+        .at(source.display().to_string())
+        .caused_by(error)
+        .hint("run `jx fetch` again; the cached jar may be corrupt")
+}
+
 fn io_error(context: &str, path: &Path, error: std::io::Error) -> JxError {
     JxError::new(Kind::Io, context)
         .at(path.display().to_string())
@@ -360,12 +611,36 @@ fn io_error(context: &str, path: &Path, error: std::io::Error) -> JxError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read as _;
     use tempfile::tempdir;
 
     fn write(path: &Path, bytes: &[u8]) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
+    }
+
+    fn make_jar(path: &Path, entries: &[(&str, &[u8])]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let file = std::fs::File::create(path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, bytes) in entries {
+            zip.start_file(*name, options).unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    fn read_entry(path: &Path, name: &str) -> Vec<u8> {
+        let file = std::fs::File::open(path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let mut bytes = Vec::new();
+        archive
+            .by_name(name)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        bytes
     }
 
     fn read_jar(path: &Path) -> (String, Vec<String>) {
@@ -400,6 +675,7 @@ mod tests {
         std::fs::write(dist.join("stale/old.txt"), b"old").unwrap();
 
         let output = package(&PackageRequest {
+            mode: PackageMode::Thin,
             dist_dir: &dist,
             classes_dir: &classes,
             jar_name: "app-0.1.0.jar",
@@ -435,12 +711,89 @@ mod tests {
     }
 
     #[test]
+    fn fat_jar_merges_services_and_reports_skips() {
+        let dir = tempdir().unwrap();
+        let classes = dir.path().join("classes");
+        write(&classes.join("app/App.class"), b"project-app");
+        write(
+            &classes.join("META-INF/services/com.example.Spi"),
+            b"app.ProjectProvider\n",
+        );
+        let dep1 = dir.path().join("dep1.jar");
+        make_jar(
+            &dep1,
+            &[
+                ("dep/One.class", b"one"),
+                ("app/App.class", b"dep-app-loses"),
+                ("META-INF/MANIFEST.MF", b"dep-manifest"),
+                ("META-INF/DEP.SF", b"signature"),
+                ("META-INF/versions/9/dep/One.class", b"versioned"),
+                (
+                    "META-INF/services/com.example.Spi",
+                    b"# providers\ndep.One\n",
+                ),
+            ],
+        );
+        let dep2 = dir.path().join("dep2.jar");
+        make_jar(
+            &dep2,
+            &[
+                ("dep/Two.class", b"two"),
+                ("META-INF/services/com.example.Spi", b"dep.Two\ndep.One\n"),
+            ],
+        );
+        let dist = dir.path().join("dist");
+        let output = package(&PackageRequest {
+            mode: PackageMode::Fat,
+            dist_dir: &dist,
+            classes_dir: &classes,
+            jar_name: "app-0.1.0-all.jar",
+            main_class: Some("app.App"),
+            dependencies: &[
+                DependencyJar {
+                    relative_path: "ignored/dep1.jar",
+                    source: &dep1,
+                },
+                DependencyJar {
+                    relative_path: "ignored/dep2.jar",
+                    source: &dep2,
+                },
+            ],
+        })
+        .unwrap();
+        assert_eq!(output.dependency_count, 2);
+        assert!(output.lib_dir.is_none());
+        assert_eq!(output.duplicate_entries, 1);
+        assert_eq!(output.versioned_entries, 1);
+        assert!(!dist.join("lib").exists());
+
+        let (manifest, names) = read_jar(&output.jar);
+        assert!(manifest.contains("Main-Class: app.App\r\n"), "{manifest}");
+        assert!(!manifest.contains("Class-Path"), "{manifest}");
+        assert!(!names.iter().any(|name| name.ends_with(".SF")));
+        assert!(
+            !names
+                .iter()
+                .any(|name| name.starts_with("META-INF/versions/")),
+            "{names:?}"
+        );
+        assert_eq!(read_entry(&output.jar, "app/App.class"), b"project-app");
+        assert_eq!(read_entry(&output.jar, "dep/One.class"), b"one");
+        assert_eq!(read_entry(&output.jar, "dep/Two.class"), b"two");
+        let services =
+            String::from_utf8(read_entry(&output.jar, "META-INF/services/com.example.Spi"))
+                .unwrap();
+        assert_eq!(services, "app.ProjectProvider\ndep.One\ndep.Two\n");
+    }
+
+    #[test]
     fn libraries_have_no_main_class_header() {
         let dir = tempdir().unwrap();
         let classes = dir.path().join("classes");
         write(&classes.join("lib/Lib.class"), b"lib");
         let dist = dir.path().join("dist");
         let output = package(&PackageRequest {
+            mode: PackageMode::Thin,
             dist_dir: &dist,
             classes_dir: &classes,
             jar_name: "lib-0.1.0.jar",

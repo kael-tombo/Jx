@@ -20,7 +20,9 @@ references and integrity (repositories live in `config.toml`, per ADR
 0003); [decisions/0004-lockfile-and-resolution-policy.md](decisions/0004-lockfile-and-resolution-policy.md)
 — the lockfile, version selection and conflict rules M3 implements;
 [decisions/0005-packaging-layout.md](decisions/0005-packaging-layout.md) —
-the thin jar and `target/dist` layout. Still planned for later milestones:
+the thin jar and `target/dist` layout;
+[decisions/0006-fat-jar-merge-rules.md](decisions/0006-fat-jar-merge-rules.md)
+— opt-in fat-jar merging. Still planned for later milestones:
 
 * `docs/quickstart.md` — the executed-in-CI quickstart
 * `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
@@ -61,7 +63,7 @@ milestones; nothing in this repository claims to support them yet.
 | M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | done |
 | M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
 | M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
-| M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **in progress** — thin jar + dist done; fat jar and `export maven` remain |
+| M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **in progress** — thin/fat jars and dist done; `export maven` remains |
 | M6 | Runtime trimming: jdeps + jlink with fallback | not started |
 | M7 | Maven and Gradle interop: import, compatibility, delegate, exports | not started |
 | M8 | Release hardening: docs, install script, security checklist | not started |

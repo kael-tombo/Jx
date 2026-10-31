@@ -68,9 +68,10 @@ The command is `jx package`; `jx build` remains compile-only.
 * Moving or archiving `target/dist` keeps the application runnable with
   `java -jar target/dist/<name>-<version>.jar`; the `lib/` tree must travel
   with it.
-* No jar signing, shading, jlink image, native launcher or `export maven`
-  output yet. Those remain M5/M6/M7 work and are listed in
-  `docs/KNOWN_LIMITATIONS.md`.
+* Opt-in fat jars were added later with explicit merge rules in
+  [ADR 0006](0006-fat-jar-merge-rules.md). No jar signing, relocation-aware
+  shading, jlink image, native launcher or `export maven` output yet; those
+  remain M5/M6/M7 work and are listed in `docs/KNOWN_LIMITATIONS.md`.
 * Packaging reuses the normal compile and lock fast paths: dependencies come
   from verified cache entries and no network is needed when the lock and
   cache are complete.

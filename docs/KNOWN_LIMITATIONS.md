@@ -3,7 +3,7 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M5 in progress; thin packaging done)
+## Current (M5 in progress; thin and fat packaging done)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx add`, `jx remove`, `jx lock`, `jx fetch`, `jx tree`,
@@ -14,8 +14,8 @@ Maven version ordering and the effective-POM loader. M3 added the resolver,
 the lockfile, the six dependency commands, and the lock fast path that puts
 cached jars on javac's and java's classpath. M4 added fingerprint-skipped
 javac builds, separate main/test dependency classpaths, test compilation and
-JUnit 5 execution. M5's first slice added thin jars and the `target/dist`
-layout; shading, jlink images and `export maven` are still open.
+JUnit 5 execution. M5 added thin jars, fat jars and the `target/dist` layout;
+jlink images and `export maven` are still open.
 
 ### Manifest
 
@@ -126,15 +126,26 @@ layout; shading, jlink images and `export maven` are still open.
   machines.
 - **`jx build` does not produce a jar**; use `jx package` for artifacts.
 
-### Packaging (M5 slice)
+### Packaging (M5)
 
-- **Only a thin jar is produced.** `target/dist/<name>-<version>.jar`
-  contains the project's classes and resources; dependencies are separate
-  jars under `target/dist/lib/<group path>/`. There is no fat/shaded jar,
-  no jar signing and no jlink/jdeps trimming yet.
-- **The `Class-Path` manifest uses relative paths** into `lib/`; the whole
-  `target/dist` tree can be moved and still run with `java -jar` from any
-  working directory. The jar is not standalone without its `lib/` tree.
+- **Thin packaging** writes `target/dist/<name>-<version>.jar` with the
+  project's classes and resources; dependencies are separate jars under
+  `target/dist/lib/<group path>/`.
+- **Fat packaging** (`jx package --fat`) writes one
+  `target/dist/<name>-<version>-all.jar` and no `lib/`. Project entries win
+  duplicate class/resource paths; dependency duplicates are first-wins in
+  lock order. `META-INF/services` files are merged and de-duplicated.
+  Dependency manifests, signature files, `META-INF/INDEX.LIST` and
+  `module-info.class` are omitted; multi-release `META-INF/versions/` entries
+  are skipped and counted. These skips and duplicate counts are printed.
+- **The thin `Class-Path` manifest uses relative paths** into `lib/`; the
+  whole `target/dist` tree can be moved and still run with `java -jar` from
+  any working directory. The thin jar is not standalone without its `lib/`
+  tree.
+- **Fat jars are not a general shaded-jar replacement yet.** Multi-release
+  dependency behavior is lost, `module-info` is omitted, and duplicate
+  resources do not get artifact-specific names. There is no jar signing or
+  jlink/jdeps trimming.
 - **Packaging is application and library friendly**: a discovered or pinned
   main class becomes `Main-Class`; a library with no main class still gets a
   jar, without that header. Ambiguous main classes fail rather than choosing

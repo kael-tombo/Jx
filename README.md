@@ -1,8 +1,9 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M5 in progress; thin packaging done).** This
-> README describes the intent of the project, not yet its shipped abilities;
-> see [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
+> **Status: under construction (M5 in progress; thin and fat packaging done).**
+> This README describes the intent of the project, not yet its shipped
+> abilities; see [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the
+> honest state.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
 resolves dependencies from Maven Central into a reproducible lockfile, and
@@ -50,6 +51,7 @@ jx fetch             # download/verify exactly what jx.lock pins
 jx run               # javac and java get the locked jars on their classpath
 jx package           # target/dist: runnable jar + lib/ dependency tree
 java -jar target/dist/hello-0.1.0.jar
+jx package --fat     # one merged jar: target/dist/hello-0.1.0-all.jar
 
 # Tests
 jx add --dev org.junit.platform:junit-platform-console-standalone
@@ -64,11 +66,14 @@ are compiled against the main classes plus dev dependencies, and the JUnit
 launcher runs only that test classpath. `jx package` writes a thin jar with a
 `Main-Class` manifest and a `Class-Path` that points into `dist/lib/`, so the
 whole `target/dist` tree can be moved and still run with `java -jar`.
+`jx package --fat` instead merges main dependencies into one
+`<name>-<version>-all.jar`; duplicate classes are first-wins, `META-INF/services`
+files are merged, and signatures/multi-release entries are intentionally
+omitted.
 
-Not yet usable (they report their milestone): fat/shaded jars and `export
-maven` (remaining M5), jlink images (M6), import (M7), annotation processors
-(deferred from M4), and a separate `update` command (`jx lock` re-resolves
-wanted prefixes today).
+Not yet usable (they report their milestone): `export maven` (remaining M5),
+jlink images (M6), import (M7), annotation processors (deferred from M4), and
+a separate `update` command (`jx lock` re-resolves wanted prefixes today).
 
 ## Repository
 

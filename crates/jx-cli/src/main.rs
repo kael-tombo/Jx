@@ -41,8 +41,8 @@ impl From<ColorArg> for When {
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
 small manifest.\n\nStatus: M5 (packaging). Live: jx jdk <command>, jx new/init, jx add/remove, \
-jx lock/fetch, jx tree/why, jx build/test/run/package and jx doctor. Fat jars, \
-full distribution trimming and Maven/Gradle interop are still ahead."
+jx lock/fetch, jx tree/why, jx build/test/run/package and jx doctor. Jlink \
+images, full distribution trimming and Maven/Gradle interop are still ahead."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -125,8 +125,12 @@ enum Command {
     },
     /// Compile main and test sources, then run JUnit 5
     Test,
-    /// Package classes into a runnable jar and target/dist with dependencies
-    Package,
+    /// Package classes into a jar and target/dist
+    Package {
+        /// Merge dependencies into one runnable jar instead of a thin jar + lib/
+        #[arg(long)]
+        fat: bool,
+    },
     /// Remove target/
     Clean,
     /// Manage JDK installations under ~/.jx/jdks
@@ -212,7 +216,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Tree => deps::tree(cli).map(|()| ExitCode::SUCCESS),
         Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
         Command::Test => build::test(cli),
-        Command::Package => build::package(cli).map(|()| ExitCode::SUCCESS),
+        Command::Package { fat } => build::package(cli, *fat).map(|()| ExitCode::SUCCESS),
         Command::Export(_) => Err(unimplemented(
             "export <maven|gradle>",
             "M5/M7",

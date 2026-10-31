@@ -194,39 +194,58 @@ fn package_main(
     }
 }
 
-/// `jx package`: compile main sources, then write a runnable thin jar plus
-/// its main dependencies under `target/dist`.
-pub fn package(cli: &Cli) -> Result<(), JxError> {
+/// `jx package`: compile main sources, then write a thin `target/dist` or a
+/// single fat jar with the locked main dependencies merged in.
+pub fn package(cli: &Cli, fat: bool) -> Result<(), JxError> {
     let loaded = load(cli)?;
     let deps = deps::classpaths(cli)?;
     let feature = loaded.manifest.jdk_feature()?;
     let jdk = ensure_jdk(cli, feature)?;
     let (classes, _) = compile_main(&loaded, &jdk, &deps)?;
     let main_class = package_main(&classes, loaded.manifest.main_class())?;
-    let jar_name = jx_package::jar_file_name(&loaded.manifest.name, &loaded.manifest.version)?;
+    let base_jar = jx_package::jar_file_name(&loaded.manifest.name, &loaded.manifest.version)?;
+    let jar_name = if fat {
+        format!(
+            "{}-all.jar",
+            base_jar
+                .strip_suffix(".jar")
+                .expect("jar_file_name ends in .jar")
+        )
+    } else {
+        base_jar
+    };
 
-    let mut relative_paths = Vec::with_capacity(deps.main_jars.len());
-    for jar in &deps.main_jars {
-        let file_name = jx_package::artifact_file_name(
-            &jar.artifact_id,
-            &jar.version,
-            jar.classifier.as_deref(),
-        )?;
-        relative_paths.push(jx_package::dependency_relative_path(
-            &jar.group_id,
-            &file_name,
-        )?);
+    let mut relative_paths = Vec::new();
+    if !fat {
+        relative_paths.reserve(deps.main_jars.len());
+        for jar in &deps.main_jars {
+            let file_name = jx_package::artifact_file_name(
+                &jar.artifact_id,
+                &jar.version,
+                jar.classifier.as_deref(),
+            )?;
+            relative_paths.push(jx_package::dependency_relative_path(
+                &jar.group_id,
+                &file_name,
+            )?);
+        }
     }
-    let dependencies: Vec<jx_package::DependencyJar<'_>> = relative_paths
+    let dependencies: Vec<jx_package::DependencyJar<'_>> = deps
+        .main_jars
         .iter()
-        .zip(&deps.main_jars)
-        .map(|(relative_path, jar)| jx_package::DependencyJar {
-            relative_path,
+        .enumerate()
+        .map(|(index, jar)| jx_package::DependencyJar {
+            relative_path: relative_paths.get(index).map_or("", String::as_str),
             source: &jar.path,
         })
         .collect();
     let dist = target_dir(&loaded).join("dist");
     let output = jx_package::package(&jx_package::PackageRequest {
+        mode: if fat {
+            jx_package::PackageMode::Fat
+        } else {
+            jx_package::PackageMode::Thin
+        },
         dist_dir: &dist,
         classes_dir: &classes,
         jar_name: &jar_name,
@@ -237,16 +256,42 @@ pub fn package(cli: &Cli) -> Result<(), JxError> {
         .jar
         .strip_prefix(&loaded.manifest_dir)
         .unwrap_or(&output.jar);
-    println!(
-        "packaged {} ({} dependenc{})",
-        display.display(),
-        output.dependency_count,
-        if output.dependency_count == 1 {
-            "y"
-        } else {
-            "ies"
+    let plural = if output.dependency_count == 1 {
+        "y"
+    } else {
+        "ies"
+    };
+    if fat {
+        println!(
+            "packaged {} ({} dependenc{plural} merged)",
+            display.display(),
+            output.dependency_count
+        );
+        if output.duplicate_entries > 0 {
+            println!(
+                "  fat jar: kept the first of {} duplicate entries",
+                output.duplicate_entries
+            );
         }
-    );
+        if output.versioned_entries > 0 {
+            println!(
+                "  fat jar: skipped {} multi-release entries",
+                output.versioned_entries
+            );
+        }
+        if output.unsafe_entries > 0 {
+            println!(
+                "  fat jar: refused {} unsafe entry names",
+                output.unsafe_entries
+            );
+        }
+    } else {
+        println!(
+            "packaged {} ({} dependenc{plural})",
+            display.display(),
+            output.dependency_count
+        );
+    }
     if main_class.is_some() {
         println!("  run: java -jar {}", output.jar.display());
     } else {

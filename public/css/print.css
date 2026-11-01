@@ -143,6 +143,74 @@
     stroke: #000000;
   }
 
+  .arch,
+  .arch-layer,
+  .arch-node,
+  .arch-label,
+  .arch-chip,
+  .arch-tool-group,
+  .reuse-rule,
+  .plan-horizon,
+  .plan-thesis {
+    border-color: #000000;
+  }
+
+  .arch-label,
+  .arch-node--reused,
+  .arch-chip {
+    background: #ffffff !important;
+  }
+
+  .arch-node,
+  .arch-node--later {
+    background: #ffffff;
+  }
+
+  .arch-node--later {
+    border-block-start-style: dashed;
+  }
+
+  .arch-figure figcaption,
+  .arch-node-detail,
+  .arch-label,
+  .arch-label small,
+  .arch-sublabel,
+  .reuse-rule-body p,
+  .reuse-rule-note,
+  .plan-reuse,
+  .plan-kicker,
+  .plan-thesis-note,
+  .plan-list li,
+  .plan-foot,
+  .plan-milestones-head p {
+    color: #333333;
+  }
+
+  .arch-node-title,
+  .arch-figure figcaption strong,
+  .reuse-rule-title,
+  .plan-thesis-text,
+  .plan-list strong {
+    color: #000000;
+  }
+
+  .arch-grid--2,
+  .arch-grid--3,
+  .arch-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .arch-layer,
+  .arch-node,
+  .reuse-rule,
+  .plan-horizon {
+    break-inside: avoid;
+  }
+
+  .plan-horizons {
+    grid-template-columns: 1fr;
+  }
+
   .swatch {
     border-color: #000000;
     background: #ffffff;

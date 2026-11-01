@@ -1,9 +1,11 @@
 # jx — a Cargo/uv-style front door for Java
 
-> **Status: under construction (M7 in progress: build, run, test, packaging,
-> Maven/Gradle import and export, runtime images).** This README describes the
-> intent of the project, not yet its shipped abilities; see
-> [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
+> **Status: V1 (1.0.0), release hardening complete.** The source tree covers
+> the five-minute path, dependency locking, build/test/run, packaging, runtime
+> images and Maven/Gradle interop. Release archives, installers and the
+> security record are ready; binaries are published from version tags. See
+> [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state
+> and [docs/security-checklist.md](docs/security-checklist.md) for the review.
 
 `jx` is a single-binary command line tool, written in Rust, that manages JDKs,
 resolves dependencies from Maven Central into a reproducible lockfile, and
@@ -16,11 +18,54 @@ North star: on a machine with nothing installed,
 1. One tool, one manifest, one lockfile.
 2. Smooth beats complete — protect the five-minute happy path first.
 3. Every error says what happened, where, and what to try next.
-4. Reuse the ecosystem (Maven Central, the JDK's own tools) and always offer
-   an exit (`jx export maven`).
+4. Sit on top of the ecosystem — Maven Central, the JDK's own tools,
+   Maven/Gradle, JBang, the platform installers — and always offer an exit
+   (`jx export maven`). Never reimplement a tool that already does the job.
 5. Fast: no JVM starts unless needed.
 6. Never silent about risk: conflicts, changed checksums and unsupported POM
    features are loud.
+
+## Install
+
+Prebuilt archives are published from `v*` tags. Every release ships five
+platforms, a `SHA256SUMS` file and a GitHub build provenance attestation:
+
+* Linux x64 (glibc 2.35 or newer), Linux arm64 (glibc 2.39 or newer)
+* macOS x64 and Apple silicon
+* Windows x64
+
+Download the archive for your platform from
+<https://github.com/kael-tombo/Jx/releases>, then verify it before running:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify jx-v1.0.0-x86_64-unknown-linux-gnu.tar.gz \
+  --repo kael-tombo/Jx
+tar -xzf jx-v1.0.0-x86_64-unknown-linux-gnu.tar.gz
+install -m 755 jx-v1.0.0-x86_64-unknown-linux-gnu/jx ~/.local/bin/jx
+```
+
+The installers do the same checksum check, need no `sudo`, and install into
+`~/.local/bin` (Unix) or `%LOCALAPPDATA%\jx\bin` (Windows):
+
+```sh
+# macOS / Linux: inspect first, then run
+curl -fsSLO https://raw.githubusercontent.com/kael-tombo/Jx/main/install.sh
+less install.sh
+sh install.sh
+```
+
+```powershell
+# Windows PowerShell: inspect first, then run
+Invoke-WebRequest https://raw.githubusercontent.com/kael-tombo/Jx/main/install.ps1 -OutFile install.ps1
+notepad install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Use `--version v1.0.0` (or `JX_VERSION`) to pin a release. If no release exists
+for your platform yet, build from source; the installers refuse an archive
+whose checksum does not match. Release artifacts are not signed by a
+maintainer key yet, so the checksum and attestation are the available signals.
 
 ## Building from source
 
@@ -53,7 +98,7 @@ jx package           # target/dist: runnable jar + lib/ dependency tree
 java -jar target/dist/hello-0.1.0.jar
 jx package --fat     # one merged jar: target/dist/hello-0.1.0-all.jar
 jx image             # target/dist/runtime: trimmed jlink runtime
-jx image --full      # all JDK modules when reflection needs them
+jx image --full      # all linkable JDK modules when reflection needs them
 jx export maven --group-id com.example  # write a POM from the lockfile
 jx export gradle --group-id com.example # write build.gradle.kts + settings
 
@@ -61,6 +106,13 @@ jx export gradle --group-id com.example # write build.gradle.kts + settings
 jx import            # convert ./pom.xml, build.gradle(.kts) into project.toml
 jx import service/pom.xml --dry-run  # print the manifest and notes only
 jx import app/build.gradle.kts --dry-run
+
+# Or keep the native build and delegate build/test/clean to it
+#   [build]
+#   engine = "maven"    # or "gradle"
+jx build              # runs ./mvnw -B compile with the pinned JDK
+jx test               # runs the build tool's own test goal
+jx --engine maven test  # one-off delegation without editing project.toml
 
 # Tests
 jx add --dev org.junit.platform:junit-platform-console-standalone
@@ -84,7 +136,9 @@ platform BOMs are inlined and an existing `pom.xml` is not overwritten unless
 `--force` is passed (ADR 0007). `jx image` asks `jdeps` which modules the app
 needs, builds a verified `jlink` runtime under `target/dist/runtime`, and
 falls back to a full runtime when analysis cannot trim; use `--full` when
-reflection loads modules at runtime (ADR 0009). `jx import` reads the
+reflection loads modules at runtime (ADR 0009). A full image omits
+`jdk.jlink` and `jdk.jpackage`: Temurin 24+ ships without `jmods/` (JEP 493),
+and a JMOD-less JDK cannot link those two tool modules into another image. `jx import` reads the
 project's effective POM (parents, properties and imported BOMs included),
 writes `project.toml` with exact direct-dependency pins and prints every
 approximation it made; it refuses to overwrite an existing manifest without
@@ -98,9 +152,32 @@ BOM (ADR 0011). `jx export gradle` writes a Kotlin-DSL build with the locked
 versions, dev dependencies as `testImplementation` and `[overrides]` as
 constraints.
 
-Not yet usable: Maven/Gradle compatibility and delegated builds (M7),
-annotation processors (deferred from M4), and a separate `update` command
-(`jx lock` re-resolves wanted prefixes today).
+`[build] engine = "maven"` (or `"gradle"`) keeps the native build
+authoritative while jx owns the JDK: `jx build`, `jx test` and `jx clean` run
+the project's wrapper (or the installed tool) in the project directory with
+`JAVA_HOME` set to the pinned JDK, forward `--offline`, and exit with the
+tool's own code. Commands that would edit or describe a graph the build does
+not use — the dependency commands, `run`, `package`, `image` and exports —
+are refused with a `--engine jx` escape (ADR 0012); `--engine` selects an
+engine for one invocation.
+
+## Composition
+
+jx owns the path, not the tools. The JDK owns compilation, tests, linking and
+its own runtime tools; Maven Central owns artifact bytes; Maven and Gradle own
+the build when `[build] engine` delegates; Chocolatey, Homebrew, Scoop and the
+platform installer own OS installs; JBang owns scripts and single-file
+programs. The JBang and OS-installer adapters are **after V1** and are not
+wired yet. The boundary and the rules for adding an adapter are in
+[docs/decisions/0013-compose-the-ecosystem.md](docs/decisions/0013-compose-the-ecosystem.md).
+
+The five-minute path never requires any of those external tools.
+
+Not yet usable: annotation processors (deferred from M4), a separate `update`
+command (`jx lock` re-resolves wanted prefixes today), manifest-less
+delegation (a `project.toml` supplies the JDK pin), delegated `run` /
+`package` (use the build tool, or `--engine jx`), and the post-V1 JBang and
+OS-installer adapters.
 
 ## Design preview website
 
@@ -134,6 +211,12 @@ are in [docs/QUALITY.md](docs/QUALITY.md).
 * [docs/decisions/0009-runtime-images.md](docs/decisions/0009-runtime-images.md) — jdeps/jlink image decisions
 * [docs/decisions/0010-maven-import.md](docs/decisions/0010-maven-import.md) — what `jx import` converts from Maven
 * [docs/decisions/0011-gradle-interop.md](docs/decisions/0011-gradle-interop.md) — the Gradle import subset and export shape
+* [docs/decisions/0012-delegated-builds.md](docs/decisions/0012-delegated-builds.md) — delegated Maven/Gradle builds and their command boundary
+* [docs/decisions/0013-compose-the-ecosystem.md](docs/decisions/0013-compose-the-ecosystem.md) — what jx owns, what stays with the ecosystem, and the adapter rules
+* [SECURITY.md](SECURITY.md) — reporting, supported versions and the security model
+* [docs/security-checklist.md](docs/security-checklist.md) — the V1 review record and open owner actions
+* [docs/RELEASING.md](docs/RELEASING.md) — version, tag and release verification
+* [docs/quickstart.md](docs/quickstart.md) — install to first run, with verification
 * [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — what does not work yet
 * [docs/LAUNCH.md](docs/LAUNCH.md) — website launch gates and owner inputs
 * [docs/QUALITY.md](docs/QUALITY.md) — measured site quality record

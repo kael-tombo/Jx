@@ -5,9 +5,10 @@ test.describe("landing page", () => {
     await page.goto("/");
     await expect(page).toHaveTitle("The missing front door to Java | jx");
     await expect(page.locator("h1")).toHaveText("The missing front door to Java.");
-    await expect(page.locator(".hero-sub")).toContainText("A proposed command-line tool");
-    await expect(page.locator(".hero .badge")).toContainText("Design preview, not yet released");
-    await expect(page.locator(".status-strip")).toContainText("Not scheduled");
+    await expect(page.locator(".hero-sub")).toContainText("A command-line tool for Java");
+    await expect(page.locator(".hero .badge")).toContainText("V1 implemented");
+    await expect(page.locator(".hero .badge")).toContainText("release pending");
+    await expect(page.locator(".status-strip")).toContainText("Pending tag");
     await expect(page.locator("main")).toHaveAttribute("data-status", "draft");
   });
 
@@ -48,7 +49,7 @@ test.describe("landing page", () => {
     await expect(first).not.toHaveAttribute("open", "");
     await first.locator("summary").click();
     await expect(first).toHaveAttribute("open", "");
-    await expect(first.locator("p")).toHaveText("No. There is no release, and the V1 plan is public.");
+    await expect(first.locator("p")).toHaveText("V1 is implemented, but no tagged release exists yet. Build from source for now; the installers will publish from the v1.0.0 tag.");
   });
 
   test("does not overflow at 375 pixels", async ({ page }) => {
@@ -113,12 +114,14 @@ test.describe("without JavaScript", () => {
 });
 
 test.describe("docs", () => {
-  test("share a sidebar, a status badge and a draft command reference", async ({ page }) => {
+  test("share a sidebar, a status badge and an implemented command reference", async ({ page }) => {
     await page.goto("/docs/commands.html");
     await expect(page.locator(".docs-nav a[aria-current='page']")).toHaveText("Commands");
-    await expect(page.locator(".doc-head .badge")).toContainText("Draft");
-    await expect(page.locator("tbody tr")).toHaveCount(17);
-    await expect(page.locator("p.note")).toContainText("Every command in this table is part of the V1 plan");
+    await expect(page.locator(".doc-head .badge")).toContainText("V1 implemented");
+    await expect(page.locator("tbody tr")).toHaveCount(19);
+    await expect(page.locator("tbody")).toContainText("jx package");
+    await expect(page.locator("tbody")).toContainText("jx image");
+    await expect(page.locator("p.note")).toContainText("Every command in this table is implemented in the V1 source tree");
   });
 
   test("copy the illustrative manifest and announce it", async ({ page, context }) => {

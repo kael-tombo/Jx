@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The missing front door to Java | jx</title>
-  <meta name="description" content="A proposed command-line tool for Java in the spirit of Cargo, uv and npm. One manifest, one command set; in design and not yet released.">
+  <meta name="description" content="A command-line tool for Java in the spirit of Cargo, uv and npm. One manifest, one command set. V1 is implemented; release binaries are pending.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/}}">
@@ -20,12 +20,12 @@
   <script type="module" src="js/terminal.js"></script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="The missing front door to Java | jx">
-  <meta property="og:description" content="A proposed command-line tool for Java in the spirit of Cargo, uv and npm. One manifest, one command set; not yet released.">
+  <meta property="og:description" content="A command-line tool for Java in the spirit of Cargo, uv and npm. One manifest, one command set. V1 is implemented; release binaries are pending.">
   <meta property="og:url" content="{{TODO: https://domain/}}">
   <meta property="og:image" content="{{TODO: https://domain/assets/og.png}}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="The jx design preview: the headline, a target terminal example and the project status.">
+  <meta property="og:image:alt" content="The jx site: the headline, a first-run terminal example and the project status.">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">
     {
@@ -34,7 +34,8 @@
       "name": "jx",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Linux, macOS, Windows",
-      "description": "A proposed command-line tool for Java in the spirit of Cargo, uv and npm. One manifest and one command set. Not yet released.",
+      "description": "A command-line tool for Java in the spirit of Cargo, uv and npm. One manifest and one command set. V1 is implemented; release binaries are pending.",
+      "softwareVersion": "1.0.0",
       "license": "https://github.com/kael-tombo/Jx/blob/main/LICENSE-APACHE",
       "codeRepository": "https://github.com/kael-tombo/Jx"
     }
@@ -58,18 +59,18 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <span class="badge" data-status="draft">Design preview, not yet released</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented · release pending</span>
           <h1 class="hero-title" id="hero-title">The missing front door to Java.</h1>
-          <p class="hero-sub">A proposed command-line tool for Java, in the spirit of Cargo, uv and npm. It would manage the JDK and dependencies from Maven Central, then build, test, run and package the project from one manifest. The goal is for <code>jx run</code> to work the same for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE.</p>
+          <p class="hero-sub">A command-line tool for Java, in the spirit of Cargo, uv and npm. It puts one manifest and one command set over the JDK, Maven Central and the tools already on your machine, composing them rather than replacing them. It builds, tests, runs and packages from that one file. The goal is for <code>jx run</code> to work the same for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE.</p>
           <div class="hero-actions">
-            <a class="button button--primary" href="vision.html">Read the vision</a>
-            <a class="button button--quiet" href="roadmap.html">See the roadmap</a>
+            <a class="button button--primary" href="docs/quickstart.html">Quickstart</a>
+            <a class="button button--quiet" href="vision.html">Read the vision</a>
             <a class="text-link" href="https://github.com/kael-tombo/Jx">Follow on GitHub</a>
           </div>
           <dl class="status-strip">
             <div>
               <dt>Status</dt>
-              <dd>Design</dd>
+              <dd>V1 implemented</dd>
             </div>
             <div>
               <dt>V1 plan</dt>
@@ -77,7 +78,7 @@
             </div>
             <div>
               <dt>Release</dt>
-              <dd>Not scheduled</dd>
+              <dd>Pending tag</dd>
             </div>
           </dl>
         </div>
@@ -85,7 +86,7 @@
         <div class="hero-terminal">
           <figure class="terminal" data-terminal>
             <div class="terminal-bar">
-              <span class="terminal-label">Target experience</span>
+              <span class="terminal-label">First run</span>
               <div class="terminal-actions">
                 <button class="terminal-control" type="button" data-terminal-pause hidden>Pause</button>
                 <button class="terminal-control" type="button" data-terminal-all hidden>Show all</button>
@@ -97,7 +98,7 @@ $ jx run
 Hello, world!</code></pre>
               <pre class="terminal-animated" aria-hidden="true" hidden><code></code></pre>
             </div>
-            <figcaption>Illustrative output, not a recording. <code>jx</code> has no public release; this is the target experience, not a supported install.</figcaption>
+            <figcaption>Illustrative output, not a recording. V1 is implemented in the source tree; release binaries are pending, so this is not yet a supported install.</figcaption>
           </figure>
         </div>
       </div>
@@ -110,7 +111,7 @@ Hello, world!</code></pre>
         </div>
         <div class="section-body">
           <p>Today a new Java project starts with a JDK to pin, a build tool to choose and a wrapper command to remember. Maven often means <code>pom.xml</code> and <code>./mvnw</code>. Gradle often means <code>build.gradle</code> and <code>./gradlew run</code>. Spring Boot, Quarkus, Vert.x and Jakarta EE each add setup of their own.</p>
-          <p>Each tool is good at its job. Together they are a lot to learn before the first line runs.</p>
+          <p>Each tool is good at its job. Together they are a lot to learn before the first line runs. jx is not another tool to learn in place of them; it is a path across them.</p>
           <p class="pullquote">Cargo, uv and npm each give their ecosystem one tool and one path. Java still asks you to assemble yours.</p>
         </div>
       </div>
@@ -122,8 +123,9 @@ Hello, world!</code></pre>
           <h2 id="runtime-title">A front door, not a new runtime.</h2>
         </div>
         <div class="section-body">
-          <p>The case for a Cargo-like tool is not a case for a larger Java. jx would not bundle a JRE into every project, vendor dependencies into the repository, or ask the JDK to include more.</p>
-          <p>It would install the JDK a project pins and reuse it from a local store. Libraries would still come from Maven Central. An optional runtime image built with the JDK's own <code>jlink</code> is planned as packaging for a deployment. <code>jlink</code> can trim a runtime after it exists; it does not provide a manifest, a resolver or a command set.</p>
+          <p>The case for a Cargo-like tool is not a case for a larger Java. jx does not bundle a JRE into every project, vendor dependencies into the repository, or ask the JDK to include more.</p>
+          <p>It installs the JDK a project pins and reuses it from a local store. Libraries still come from Maven Central. An optional runtime image built with the JDK's own <code>jlink</code> ships as packaging for a deployment. <code>jlink</code> can trim a runtime after it exists; it does not provide a manifest, a resolver or a command set.</p>
+          <p>It is also not a replacement for the tools inside the workflow. The JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform's installers keep their jobs; jx owns the path across them.</p>
           <p class="pullquote">The goal is a shorter path, not a larger bundle.</p>
         </div>
       </div>
@@ -147,15 +149,15 @@ Hello, world!</code></pre>
             </div>
             <div class="property">
               <h3>Fast feedback.</h3>
-              <p>Builds will skip work that did not change. Timings will come with the machine and project beside them.</p>
+              <p>Builds skip work that did not change. Published timings will name the machine and project behind them.</p>
             </div>
             <div class="property">
               <h3>Errors that tell you the fix.</h3>
-              <p>A failure will name what happened, where it happened and the next command to try.</p>
+              <p>A failure names what happened, where it happened and the next command to try.</p>
             </div>
             <div class="property">
               <h3>One default path.</h3>
-              <p>Most projects will not need a build script. When they do, the manifest will leave room for one.</p>
+              <p>Most projects do not need a build script. When they do, the manifest can delegate to one.</p>
             </div>
           </div>
         </div>
@@ -166,100 +168,183 @@ Hello, world!</code></pre>
       <div class="wrap">
         <div class="section-head section-head--wide">
           <h2 id="how-title">How it works.</h2>
+          <p class="section-note">One binary, one orchestration layer, no daemon. A run reads the project, ensures the JDK, resolves the lock, compiles and starts; the tools underneath keep their jobs.</p>
         </div>
         <div class="section-body">
-          <p class="section-intro">Toolchain pins the JDK. Resolver reads Maven Central and writes the lockfile. Build engine runs javac and JUnit. Packager writes a jar, a distribution and an optional runtime image.</p>
-          <figure class="diagram" aria-labelledby="diagram-caption">
-            <div class="diagram-wide">
-              <svg viewBox="0 0 900 330" aria-hidden="true" focusable="false">
-                <defs>
-                  <marker id="arrow-wide" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                    <path class="arrow" d="M0 0 L8 4 L0 8 z"></path>
-                  </marker>
-                </defs>
-                <rect class="node" x="0" y="38" width="178" height="100" rx="6"></rect>
-                <text class="node-title" x="16" y="68">Toolchain</text>
-                <text class="node-detail" x="16" y="88">pins JDKs</text>
-                <rect class="node--reused" x="16" y="101" width="46" height="18" rx="3"></rect>
-                <text class="reused-label" x="24" y="114">JDK</text>
+          <p class="section-intro">jx is not a replacement for the Java toolchain. It is the layer above it: one manifest and one command set over the JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform's installers. A command reads the project state, then calls the engine or the tool that owns the work.</p>
 
-                <rect class="node" x="230" y="38" width="190" height="100" rx="6"></rect>
-                <text class="node-title" x="246" y="68">Resolver</text>
-                <text class="node-detail" x="246" y="88">Maven Central, lockfile</text>
-                <rect class="node--reused" x="246" y="101" width="94" height="18" rx="3"></rect>
-                <text class="reused-label" x="254" y="114">Maven Central</text>
-
-                <rect class="node" x="470" y="38" width="190" height="100" rx="6"></rect>
-                <text class="node-title" x="486" y="68">Build engine</text>
-                <text class="node-detail" x="486" y="88">compile, test, report</text>
-                <rect class="node--reused" x="486" y="101" width="46" height="18" rx="3"></rect>
-                <text class="reused-label" x="494" y="114">javac</text>
-                <rect class="node--reused" x="540" y="101" width="46" height="18" rx="3"></rect>
-                <text class="reused-label" x="548" y="114">JUnit</text>
-
-                <rect class="node" x="700" y="38" width="200" height="100" rx="6"></rect>
-                <text class="node-title" x="716" y="68">Packager</text>
-                <text class="node-detail" x="716" y="88">jar, dist, optional runtime</text>
-                <rect class="node--reused" x="716" y="101" width="74" height="18" rx="3"></rect>
-                <text class="reused-label" x="724" y="114">JDK tools</text>
-
-                <path class="flow" d="M178 86 H222" marker-end="url(#arrow-wide)"></path>
-                <path class="flow" d="M420 86 H462" marker-end="url(#arrow-wide)"></path>
-                <path class="flow" d="M660 86 H692" marker-end="url(#arrow-wide)"></path>
-
-                <rect class="node--later" x="470" y="215" width="300" height="72" rx="6"></rect>
-                <text class="node-title" x="486" y="243">Maven plugin host</text>
-                <text class="later-label" x="486" y="263">planned for later</text>
-                <path class="flow flow--dashed" d="M565 138 V207" marker-end="url(#arrow-wide)"></path>
-                <text class="later-label" x="580" y="180">later</text>
-              </svg>
+          <div class="reuse-rule">
+            <div class="reuse-rule-head">
+              <p class="plan-kicker">The reuse rule</p>
+              <p class="reuse-rule-title">Own the path, not the wheel.</p>
             </div>
+            <div class="reuse-rule-body">
+              <p><strong>jx owns</strong> the manifest, the lockfile, the command vocabulary and the conflict policy — the parts no single tool owns.</p>
+              <p><strong>The tools keep</strong> their jobs: the JDK, Maven Central, javac, JUnit, Maven, Gradle, JBang and the platform installers.</p>
+              <p class="reuse-rule-note">JBang and Chocolatey are adapter targets, not wired in V1. The dashed nodes below mark what is planned.</p>
+            </div>
+          </div>
 
-            <div class="diagram-narrow">
-              <svg viewBox="0 0 360 580" aria-hidden="true" focusable="false">
-                <defs>
-                  <marker id="arrow-narrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                    <path class="arrow" d="M0 0 L8 4 L0 8 z"></path>
-                  </marker>
-                </defs>
-                <rect class="node" x="30" y="0" width="300" height="84" rx="6"></rect>
-                <text class="node-title" x="46" y="31">Toolchain</text>
-                <text class="node-detail" x="46" y="51">pins JDKs</text>
-                <text class="reused-label" x="46" y="69">reused: JDK</text>
+          <figure class="arch-figure" aria-labelledby="arch-caption">
+            <div class="arch">
+              <div class="arch-layer">
+                <div class="arch-label"><span>Command surface</span><small>What you type</small></div>
+                <div class="arch-items">
+                  <div class="arch-command">
+                    <span class="arch-command-name">jx</span>
+                    <div class="arch-chips">
+                      <span class="arch-chip">new · init</span>
+                      <span class="arch-chip">add · remove</span>
+                      <span class="arch-chip">lock · fetch</span>
+                      <span class="arch-chip">build · test</span>
+                      <span class="arch-chip">run</span>
+                      <span class="arch-chip">package · image</span>
+                      <span class="arch-chip">import · export</span>
+                      <span class="arch-chip">jdk</span>
+                      <span class="arch-chip">tree · why</span>
+                      <span class="arch-chip">clean</span>
+                      <span class="arch-chip">doctor</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                <rect class="node" x="30" y="116" width="300" height="84" rx="6"></rect>
-                <text class="node-title" x="46" y="147">Resolver</text>
-                <text class="node-detail" x="46" y="167">writes the lockfile</text>
-                <text class="reused-label" x="46" y="185">reused: Maven Central</text>
+              <div class="arch-layer">
+                <div class="arch-label"><span>State and local store</span><small>What jx remembers</small></div>
+                <div class="arch-items arch-grid arch-grid--4">
+                  <div class="arch-node">
+                    <span class="arch-node-title">project.toml</span>
+                    <span class="arch-node-detail">What you ask for: JDK pin, dependencies, main class.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">jx.lock</span>
+                    <span class="arch-node-detail">What was resolved: exact versions and checksums.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">config.toml</span>
+                    <span class="arch-node-detail">Repositories, mirrors, proxies and auth references.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">~/.jx</span>
+                    <span class="arch-node-detail">JDK store, artifact cache and metadata.</span>
+                  </div>
+                </div>
+              </div>
 
-                <rect class="node" x="30" y="232" width="300" height="84" rx="6"></rect>
-                <text class="node-title" x="46" y="263">Build engine</text>
-                <text class="node-detail" x="46" y="283">compile, test, report</text>
-                <text class="reused-label" x="46" y="301">reused: javac, JUnit</text>
+              <div class="arch-layer">
+                <div class="arch-label"><span>Engines</span><small>What jx coordinates</small></div>
+                <div class="arch-items arch-grid arch-grid--3">
+                  <div class="arch-node">
+                    <span class="arch-node-title">Toolchain</span>
+                    <span class="arch-node-detail">Temurin, SHA-256, install once, reuse.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">Resolver</span>
+                    <span class="arch-node-detail">POMs, BOMs, overrides, conflict policy, lock.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">Build</span>
+                    <span class="arch-node-detail">javac, resources, fingerprints, JUnit.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">Run</span>
+                    <span class="arch-node-detail">Main discovery and a plain-main runner.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">Package</span>
+                    <span class="arch-node-detail">Thin and fat jars, dist, optional jdeps/jlink image.</span>
+                  </div>
+                  <div class="arch-node">
+                    <span class="arch-node-title">Interop</span>
+                    <span class="arch-node-detail">Maven and Gradle in and out; compatibility and delegate.</span>
+                  </div>
+                </div>
+              </div>
 
-                <rect class="node" x="30" y="348" width="300" height="84" rx="6"></rect>
-                <text class="node-title" x="46" y="379">Packager</text>
-                <text class="node-detail" x="46" y="399">jar, dist, optional runtime</text>
-                <text class="reused-label" x="46" y="417">reused: JDK tools</text>
+              <div class="arch-layer">
+                <div class="arch-label"><span>Existing tools</span><small>What does the work</small></div>
+                <div class="arch-items">
+                  <div class="arch-tool-group">
+                    <p class="arch-sublabel">Reused now</p>
+                    <div class="arch-grid arch-grid--4">
+                      <div class="arch-node arch-node--reused">
+                        <span class="arch-node-title">Eclipse Temurin</span>
+                        <span class="arch-node-detail">The JDK behind the pin.</span>
+                      </div>
+                      <div class="arch-node arch-node--reused">
+                        <span class="arch-node-title">Maven Central</span>
+                        <span class="arch-node-detail">Artifacts, POMs and metadata.</span>
+                      </div>
+                      <div class="arch-node arch-node--reused">
+                        <span class="arch-node-title">JDK tools</span>
+                        <span class="arch-node-detail">javac, JUnit, jdeps and jlink.</span>
+                      </div>
+                      <div class="arch-node arch-node--reused">
+                        <span class="arch-node-title">Maven and Gradle</span>
+                        <span class="arch-node-detail">The way in and the way out.</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="arch-tool-group arch-tool-group--targets">
+                    <p class="arch-sublabel">Adapter targets · not wired in V1</p>
+                    <div class="arch-grid arch-grid--2">
+                      <div class="arch-node arch-node--later">
+                        <span class="arch-node-title">JBang</span>
+                        <span class="arch-node-detail">Scripts and single-file runs.</span>
+                      </div>
+                      <div class="arch-node arch-node--later">
+                        <span class="arch-node-title">Chocolatey, Homebrew and Scoop</span>
+                        <span class="arch-node-detail">OS install paths.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                <path class="flow" d="M180 84 V108" marker-end="url(#arrow-narrow)"></path>
-                <path class="flow" d="M180 200 V224" marker-end="url(#arrow-narrow)"></path>
-                <path class="flow" d="M180 316 V340" marker-end="url(#arrow-narrow)"></path>
-
-                <rect class="node--later" x="30" y="480" width="300" height="76" rx="6"></rect>
-                <text class="node-title" x="46" y="509">Maven plugin host</text>
-                <text class="later-label" x="46" y="531">planned for later</text>
-                <path class="flow flow--dashed" d="M180 432 V472" marker-end="url(#arrow-narrow)"></path>
-              </svg>
+              <div class="arch-layer arch-layer--later">
+                <div class="arch-label"><span>Later</span><small>After V1</small></div>
+                <div class="arch-items arch-grid arch-grid--3">
+                  <div class="arch-node arch-node--later">
+                    <span class="arch-node-title">Maven plugin host</span>
+                    <span class="arch-node-detail">Beside the build engine, after V1.</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <ul class="diagram-legend">
               <li><span class="swatch swatch--new" aria-hidden="true"></span>New jx component</li>
-              <li><span class="swatch swatch--reused" aria-hidden="true"></span>Reused part of the Java ecosystem</li>
+              <li><span class="swatch swatch--reused" aria-hidden="true"></span>Existing tool, reused or targeted</li>
               <li><span class="swatch swatch--later" aria-hidden="true"></span>Planned for later</li>
             </ul>
-            <figcaption id="diagram-caption"><strong>Reading.</strong> The four stages are new jx components. The JDK, Maven Central, javac and JUnit are reused. The toolchain pins a JDK. The resolver reads Maven Central and writes the lockfile. The build engine runs javac and JUnit. The packager writes a jar and an optional runtime image. A Maven plugin host would sit beside the build engine later.</figcaption>
+            <figcaption id="arch-caption"><strong>Reading.</strong> Commands read and write the state, then call one or more engines. The engines reuse Eclipse Temurin, Maven Central, the JDK's own tools, Maven and Gradle. JBang and the platform installers are adapter targets, not wired in V1. There is no daemon and no hidden build script. A Maven plugin host is planned beside the build engine later.</figcaption>
           </figure>
+
+          <div class="arch-path">
+            <h3>Path of one <code>jx run</code></h3>
+            <ol class="steps">
+              <li>
+                <h4>Read the project.</h4>
+                <p><code>project.toml</code> names the JDK, dependencies and main class. <code>jx.lock</code> pins the artifacts. If the manifest is newer, jx re-locks or fails under <code>--locked</code>.</p>
+              </li>
+              <li>
+                <h4>Ensure the JDK.</h4>
+                <p>Toolchain resolves the pinned feature through Eclipse Temurin, verifies the archive's SHA-256 and reuses the install from <code>~/.jx/jdks</code>.</p>
+              </li>
+              <li>
+                <h4>Get the artifacts.</h4>
+                <p>Resolver takes the lock fast path when it can. Cached jars are checked against the lockfile's checksums; misses are fetched from Maven Central.</p>
+              </li>
+              <li>
+                <h4>Compile.</h4>
+                <p>Build runs <code>javac</code> with the pinned JDK. Fingerprints skip a build when the sources, resources and classpath have not changed.</p>
+              </li>
+              <li>
+                <h4>Start.</h4>
+                <p>Run discovers or uses the pinned main class and starts it on the pinned JDK. <code>jx test</code> adds JUnit, <code>jx package</code> writes <code>target/dist</code>, and <code>jx image</code> adds the optional runtime.</p>
+              </li>
+            </ol>
+          </div>
         </div>
       </div>
     </section>
@@ -270,14 +355,14 @@ Hello, world!</code></pre>
           <h2 id="stacks-title">One command for every stack.</h2>
         </div>
         <div class="section-body">
-          <p>The destination is one command vocabulary for Java. The same <code>jx run</code> would work whether the project is plain Java or a framework. Cargo, uv and npm each provide one for their ecosystem. V1 covers plain Java only; framework adapters come later.</p>
+          <p>The destination is one command vocabulary for Java. The same <code>jx run</code> is the goal whether the project is plain Java or a framework. Cargo, uv and npm each provide one for their ecosystem. V1 covers plain Java; framework adapters come later.</p>
           <section class="table-wrap" aria-labelledby="stacks-caption" tabindex="0">
             <table>
-              <caption id="stacks-caption">Target behaviour only. None of these adapters exists yet.</caption>
+              <caption id="stacks-caption">Plain Java is implemented. No framework adapter exists yet.</caption>
               <thead>
                 <tr>
                   <th scope="col">Stack</th>
-                  <th scope="col">What jx would do</th>
+                  <th scope="col">What jx does or will do</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
@@ -285,7 +370,7 @@ Hello, world!</code></pre>
                 <tr>
                   <th scope="row">Plain Java</th>
                   <td>Compile and run a main class.</td>
-                  <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
                 </tr>
                 <tr>
                   <th scope="row">Kotlin and Scala</th>
@@ -321,10 +406,10 @@ Hello, world!</code></pre>
           <h2 id="interop-title">Works with Maven and Gradle.</h2>
         </div>
         <div class="section-body">
-          <p>Four levels are planned for V1. Gradle support covers a declarative subset of its build model.</p>
+          <p>V1 provides three levels of interop. Gradle support covers a declarative subset of its build model.</p>
           <section class="table-wrap" aria-labelledby="interop-caption" tabindex="0">
             <table>
-              <caption id="interop-caption">Planned interop. None of these modes runs yet.</caption>
+              <caption id="interop-caption">The interop modes implemented in V1.</caption>
               <thead>
                 <tr>
                   <th scope="col">Level</th>
@@ -336,27 +421,22 @@ Hello, world!</code></pre>
                 <tr>
                   <th scope="row">Export</th>
                   <td>Write a Maven or Gradle build from the jx manifest.</td>
-                  <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
                 </tr>
                 <tr>
                   <th scope="row">Import</th>
                   <td>Read an existing Maven or Gradle project into a jx manifest.</td>
-                  <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
                 </tr>
                 <tr>
-                  <th scope="row">Compatibility mode</th>
-                  <td>Use the existing build files while jx supplies the toolchain and commands.</td>
-                  <td><span class="badge" data-status="proposed">Planned for V1</span></td>
-                </tr>
-                <tr>
-                  <th scope="row">Delegate mode</th>
-                  <td>Call Maven or Gradle for the build.</td>
-                  <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                  <th scope="row">Delegated builds</th>
+                  <td>Run the project's own Maven or Gradle build for build, test and clean, with jx supplying the pinned JDK and command surface.</td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
                 </tr>
               </tbody>
             </table>
           </section>
-          <p class="table-note">Export is the exit: a project can leave with a build file it already understands. Maven plugins are not run natively in V1; delegate mode calls Maven or Gradle, and a plugin host is planned.</p>
+          <p class="table-note">Export is the exit: a project can leave with a build file it already understands. Maven plugins are not run natively in V1; delegated builds call Maven or Gradle, so existing plugins run there. A plugin host is planned.</p>
         </div>
       </div>
     </section>
@@ -369,7 +449,7 @@ Hello, world!</code></pre>
         <div class="section-body">
           <section class="table-wrap table-wrap--wide" aria-labelledby="compare-caption" tabindex="0">
             <table class="table--compare">
-              <caption id="compare-caption">A comparison of shape, not of quality. The jx column is the design target, not a measured result.</caption>
+              <caption id="compare-caption">A comparison of shape, not of quality. The jx column describes V1 behaviour; it is not a benchmark.</caption>
               <thead>
                 <tr>
                   <th scope="col">Property</th>
@@ -385,71 +465,138 @@ Hello, world!</code></pre>
                   <td>Yes</td>
                   <td>Yes</td>
                   <td>Yes</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
                 <tr>
                   <th scope="row">One command set</th>
                   <td>Yes</td>
                   <td>Yes</td>
                   <td>Partly; scripts assemble it</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
                 <tr>
                   <th scope="row">Manages the toolchain</th>
                   <td>Via rustup</td>
                   <td>Yes</td>
                   <td>Via a version manager</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
                 <tr>
                   <th scope="row">Builds and tests</th>
                   <td>Yes</td>
                   <td>Via a backend and runner</td>
                   <td>Via scripts</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
                 <tr>
                   <th scope="row">Packages</th>
                   <td>Publishes crates</td>
                   <td>Via a backend</td>
                   <td>Yes</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
                 <tr>
                   <th scope="row">Lockfile covers all platforms</th>
                   <td>Yes</td>
                   <td>Yes</td>
                   <td>Yes</td>
-                  <td>Target</td>
+                  <td>Yes</td>
                 </tr>
               </tbody>
             </table>
           </section>
-          <p class="table-note">Each description follows that tool's public documentation as a shape, not a benchmark. jx has no measurement to show yet.</p>
+          <p class="table-note">Each description follows that tool's public documentation as a shape, not a benchmark. No performance measurement is claimed for jx.</p>
         </div>
       </div>
     </section>
 
     <section class="section" aria-labelledby="plan-title">
       <div class="wrap">
-        <div class="section-grid">
-          <div class="section-head">
-            <h2 id="plan-title">The plan, in public.</h2>
-            <p class="section-note">Milestones M0 to M8. No dates yet.</p>
+        <div class="section-head section-head--wide">
+          <h2 id="plan-title">The plan, in public.</h2>
+          <p class="section-note">The destination, the V1 feature set and the line around it. V1 is implemented; no tagged release exists yet.</p>
+        </div>
+        <div class="section-body">
+          <div class="plan-thesis">
+            <p class="plan-kicker">The destination</p>
+            <p class="plan-thesis-text">One front door for Java. <br class="plan-break">Plain Java first. Every stack after.</p>
+            <p class="plan-thesis-note">One manifest, one lockfile, one command set over the tools that already exist. Maven Central stays. Export remains the exit.</p>
           </div>
-          <div class="section-body">
+
+          <p class="note plan-reuse"><strong>Own the path, not the wheel.</strong> jx composes the JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform installers. JBang and Chocolatey are adapter targets; neither is wired in V1.</p>
+
+          <div class="plan-horizons">
+            <article class="plan-horizon plan-horizon--v1">
+              <div class="plan-horizon-head">
+                <p class="plan-kicker">V1 · Plain Java</p>
+                <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span>
+              </div>
+              <h3>The whole path, one tool.</h3>
+              <ul class="plan-list">
+                <li><strong>Toolchain.</strong> Pin a JDK feature; fetch Eclipse Temurin; verify SHA-256; reuse it from the local store.</li>
+                <li><strong>Dependencies.</strong> Resolve from Maven Central with POMs, BOMs, overrides and a checksum-pinned lockfile.</li>
+                <li><strong>Build and test.</strong> Run javac with fingerprints, copy resources, and launch JUnit on the test classpath.</li>
+                <li><strong>Run and package.</strong> Discover the main class, write thin and fat jars, a dist tree and an optional runtime image.</li>
+                <li><strong>Interop.</strong> Import Maven and Gradle; export Maven and Gradle; delegate build, test and clean to either tool.</li>
+                <li><strong>Composition.</strong> Call the JDK, Maven Central, javac, JUnit, Maven and Gradle. jx owns the path; the tools keep their work.</li>
+                <li><strong>Guardrails.</strong> Offline and locked modes, a doctor command, tree and why reports, and a visible conflict report.</li>
+              </ul>
+            </article>
+
+            <article class="plan-horizon plan-horizon--after">
+              <div class="plan-horizon-head">
+                <p class="plan-kicker">After V1 · The same command</p>
+                <span class="badge badge--quiet" data-status="idea">Unscheduled</span>
+              </div>
+              <h3>One <code>jx run</code> across stacks.</h3>
+              <ul class="plan-list">
+                <li><strong>Framework adapters.</strong> Spring Boot, Quarkus, Vert.x, Micronaut and Jakarta EE start with the same command.</li>
+                <li><strong>Languages.</strong> Kotlin and Scala compilers join the same manifest and flow.</li>
+                <li><strong>Tool adapters.</strong> JBang for scripts and single-file programs; Chocolatey, Homebrew and Scoop for OS installs. Evaluate each before wiring it.</li>
+                <li><strong>Plugin host.</strong> A Maven plugin host sits beside the build engine.</li>
+                <li><strong>Framework reload.</strong> Hot reload stays with each framework; jx does not reimplement it.</li>
+              </ul>
+              <p class="plan-foot">The destination is shared; no adapter is scheduled.</p>
+            </article>
+
+            <article class="plan-horizon plan-horizon--edge">
+              <div class="plan-horizon-head">
+                <p class="plan-kicker">The boundary · Not in V1</p>
+                <span class="badge badge--quiet" data-status="draft">Deliberate</span>
+              </div>
+              <h3>A front door, not a takeover.</h3>
+              <ul class="plan-list">
+                <li><strong>Not a runtime.</strong> No new JDK, no replacement JRE, no fix for the JRE's size.</li>
+                <li><strong>Not a deployment tool.</strong> Images are packaging; shipping stays out of scope.</li>
+                <li><strong>Not a registry.</strong> Maven Central stays the source; export is the exit.</li>
+                <li><strong>Not a package manager.</strong> OS installs stay with Chocolatey, Homebrew, Scoop or the platform's own installer.</li>
+                <li><strong>No new plugin ecosystem.</strong> Maven plugins stay Maven's; jx delegates or hosts them later.</li>
+                <li><strong>No telemetry.</strong> V1 collects nothing.</li>
+              </ul>
+              <p class="plan-foot">These are scope decisions, not missing features.</p>
+            </article>
+          </div>
+
+          <div class="plan-milestones">
+            <div class="plan-milestones-head">
+              <div>
+                <p class="plan-kicker">The build</p>
+                <h3>M0–M8, in the open.</h3>
+              </div>
+              <p>The plan has public gates. M0–M8 are implemented in the source tree; the release is pending a tag. The roadmap page carries the detail.</p>
+            </div>
             <ol class="roadmap-strip" aria-label="Milestones M0 to M8">
-              <li data-status="proposed"><span class="milestone-id">M0</span><span class="milestone-name">Foundations</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M1</span><span class="milestone-name">Toolchain and hello</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M2</span><span class="milestone-name">Repository and POM model</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M3</span><span class="milestone-name">Resolver</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M4</span><span class="milestone-name">Build and test</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M5</span><span class="milestone-name">Run and package</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M6</span><span class="milestone-name">Runtime trimming</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M7</span><span class="milestone-name">Maven and Gradle interop</span><span class="milestone-state">Not released</span></li>
-              <li data-status="proposed"><span class="milestone-id">M8</span><span class="milestone-name">Release hardening</span><span class="milestone-state">Not released</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M0</span><span class="milestone-name">Foundations</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M1</span><span class="milestone-name">Toolchain and hello</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M2</span><span class="milestone-name">Repository and POM model</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M3</span><span class="milestone-name">Resolver</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M4</span><span class="milestone-name">Build and test</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M5</span><span class="milestone-name">Run and package</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M6</span><span class="milestone-name">Runtime trimming</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M7</span><span class="milestone-name">Maven and Gradle interop</span><span class="milestone-state">Implemented</span></li>
+              <li data-status="implemented" data-evidence="V1 source tree" data-since="1.0.0"><span class="milestone-id">M8</span><span class="milestone-name">Release hardening</span><span class="milestone-state">Implemented</span></li>
             </ol>
-            <p class="section-note"><a class="text-link" href="roadmap.html">See the roadmap and decision gates</a></p>
+            <p class="section-note"><a class="text-link" href="roadmap.html">Read the gates and milestone detail</a></p>
           </div>
         </div>
       </div>
@@ -465,7 +612,7 @@ Hello, world!</code></pre>
             <li><strong>One tool.</strong> One manifest, one lockfile, one command set.</li>
             <li><strong>Smooth beats complete.</strong> Protect the shortest path to a running program.</li>
             <li><strong>Errors say what to do next.</strong> A message names the cause and a way forward.</li>
-            <li><strong>Reuse the ecosystem.</strong> Maven Central stays. An export always offers a way out.</li>
+            <li><strong>Sit on top of the ecosystem.</strong> The JDK, Maven Central, Maven, Gradle, JBang and the platform installers keep their jobs; jx owns the path across them. An export always offers a way out.</li>
             <li><strong>Fast by default.</strong> No JVM starts unless it is needed. Speed claims wait for measurements.</li>
             <li><strong>Never silent about risk.</strong> Conflicts, changed checksums and unsupported POM features stay visible.</li>
           </ul>
@@ -491,15 +638,15 @@ Hello, world!</code></pre>
           <div class="faq">
             <details>
               <summary>Can I use it today?</summary>
-              <p>No. There is no release, and the V1 plan is public.</p>
+              <p>V1 is implemented, but no tagged release exists yet. Build from source for now; the installers will publish from the v1.0.0 tag.</p>
             </details>
             <details>
               <summary>Does it replace Maven or Gradle?</summary>
-              <p>No. It reuses Maven Central. Import, export and delegate modes are planned.</p>
+              <p>No. It reuses Maven Central. Import, export and delegated builds are implemented in V1.</p>
             </details>
             <details>
               <summary>Is jx another runtime, or a fix for the JRE's size?</summary>
-              <p>No. It is a workflow tool. It installs the JDK a project pins and resolves libraries from Maven Central; it does not add a JRE to every project. An optional runtime image built with the JDK's own <code>jlink</code> is planned as packaging for a deployment. <code>jlink</code> trims a runtime; it does not provide a manifest, a resolver or a run command. It is not a fix for the JRE's size.</p>
+              <p>No. It is a workflow tool. It installs the JDK a project pins and resolves libraries from Maven Central; it does not add a JRE to every project. An optional runtime image built with the JDK's own <code>jlink</code> is packaging for a deployment. <code>jlink</code> trims a runtime; it does not provide a manifest, a resolver or a run command. It is not a fix for the JRE's size.</p>
             </details>
             <details>
               <summary>Why Rust?</summary>
@@ -511,7 +658,7 @@ Hello, world!</code></pre>
             </details>
             <details>
               <summary>Will it run my Maven plugins?</summary>
-              <p>Not natively in V1. Delegate mode calls Maven or Gradle. A plugin host is planned.</p>
+              <p>Not natively in V1. Delegated builds call Maven or Gradle, so existing plugins run there. A plugin host is planned.</p>
             </details>
             <details>
               <summary>Is it official or from Oracle?</summary>
@@ -519,7 +666,7 @@ Hello, world!</code></pre>
             </details>
             <details>
               <summary>How is it different from JBang, Amper and jot?</summary>
-              <p>Each solves part of the problem. jx aims at one workflow. We are evaluating reuse and collaboration.</p>
+              <p>Each solves part of the problem. JBang runs scripts and single files; jx is aimed at the project workflow across the tools that already exist, not at replacing them. JBang is an adapter target, not wired yet.</p>
             </details>
             <details>
               <summary>What about containers and production?</summary>
@@ -542,7 +689,7 @@ Hello, world!</code></pre>
         </div>
         <div class="follow-actions">
           <a class="button button--primary" href="https://github.com/kael-tombo/Jx">Follow on GitHub</a>
-          <p class="follow-note">No email list yet. No release is scheduled.</p>
+          <p class="follow-note">No email list yet. V1 binaries publish from version tags.</p>
         </div>
       </div>
     </section>
@@ -552,7 +699,7 @@ Hello, world!</code></pre>
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="vision.html">Vision</a>
@@ -561,7 +708,7 @@ Hello, world!</code></pre>
         <a href="accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vision and principles | jx</title>
-  <meta name="description" content="Why jx is being designed, what smooth Java development means, and what the project does not claim to match.">
+  <meta name="description" content="Why jx exists, what smooth Java development means, and what the project does not claim to match.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/vision.html}}">
@@ -32,13 +32,13 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="page">
       <div class="wrap">
         <header class="page-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented · release pending</span>
           <h1>Vision and principles.</h1>
-          <p class="lede">Why jx is being designed, what smooth Java development would mean, and what the project does not claim to match.</p>
+          <p class="lede">Why jx exists, what smooth Java development means, and what the project does not claim to match.</p>
         </header>
 
         <div class="prose">
@@ -46,13 +46,14 @@
             <h2 id="why-title">Why this exists</h2>
             <p>A new Java project starts with a build system, a JDK manager, a packaging tool and a way to run one file. Each choice is reasonable. Made together, they are a wall between a person and a first program.</p>
             <p>Cargo, uv and npm each give their ecosystem one front door. You learn one manifest, one command set and one place to look when something fails. Java has excellent tools, but no single front door.</p>
-            <p>jx is a proposal for that door. It would manage the JDK, resolve dependencies from Maven Central, and build, test, run and package a project from one manifest. The destination is one run command: <code>jx run</code> for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE. It is written in Rust and will ship as one binary. Nothing is released yet.</p>
+            <p>jx is that door for plain Java. It puts one manifest and one command set over the JDK, Maven Central, javac, Maven, Gradle and the tools already on the machine, composing them rather than replacing them; from that one file it builds, tests, runs and packages the project. The destination is one run command: <code>jx run</code> for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE. It is written in Rust and builds as one binary. V1 is implemented; no tagged release exists yet.</p>
           </section>
 
           <section aria-labelledby="layer-title">
             <h2 id="layer-title">A platform tool, not a runtime</h2>
             <p>Two arguments are often made together: Java needs one tool for the everyday workflow, and the JRE is larger than it needs to be. They point at different layers. jx is aimed at the first: one manifest, one JDK pin, one command set, dependencies from Maven Central.</p>
-            <p>It would not add a runtime to every project or ask the JDK to ship more. It installs the JDK a project pins and reuses it. The optional runtime image in the plan uses the JDK's own <code>jlink</code> as packaging for a deployment, not as a change to what the JDK ships.</p>
+            <p>It does not add a runtime to every project or ask the JDK to ship more. It installs the JDK a project pins and reuses it. The optional runtime image uses the JDK's own <code>jlink</code> as packaging for a deployment, not as a change to what the JDK ships.</p>
+            <p>The same rule applies inside the workflow. jx is not a new package manager, build tool or script runner. It is the layer that composes the JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform's installers. If a tool already owns the job, jx calls it. JBang and Chocolatey are adapter targets; neither is wired in V1.</p>
             <p><code>jlink</code> can trim a runtime after it exists. It does not give a project a manifest, a resolver or a run command. A platform tool can provide those without changing what the JDK ships. jx is independent; it is not an official Java tool and does not speak for the platform.</p>
           </section>
 
@@ -67,7 +68,7 @@
             <p>The target is five minutes from a machine with nothing installed to a running program. The measurement will name the machine, the network and the method. Until then, the number is a target, not a result.</p>
 
             <h3>Fast feedback</h3>
-            <p>Builds will skip work that did not change. A warm run after a one-line edit should take seconds. When there are timings, they will be published beside the project that produced them.</p>
+            <p>Builds fingerprint their inputs and skip work that did not change. When timings are published, they will name the machine and project that produced them.</p>
 
             <h3>Errors that tell you the fix</h3>
             <p>A failure should name what happened, where it happened and the next command to try. An error that only says a file is missing has not finished its job.</p>
@@ -82,7 +83,7 @@
               <li><strong>One tool.</strong> One manifest, one lockfile, one command set. Fewer moving parts in the first five minutes.</li>
               <li><strong>Smooth beats complete.</strong> A smaller workflow that works end to end beats a larger one that is nearly done.</li>
               <li><strong>Errors say what to do next.</strong> Every message names a cause and a next step. Silence is a bug.</li>
-              <li><strong>Reuse the ecosystem and offer an exit.</strong> Maven Central stays. Maven and Gradle stay reachable. Export is part of the design, not a rescue plan.</li>
+              <li><strong>Sit on top of the ecosystem and offer an exit.</strong> The JDK, Maven Central, Maven, Gradle, JBang and the platform's installers keep their jobs; jx owns the path across them. Export is part of the design, not a rescue plan.</li>
               <li><strong>Fast by default.</strong> No JVM starts unless it is needed. Speed is measured before it is claimed.</li>
               <li><strong>Never silent about risk.</strong> Conflicts, changed checksums and unsupported POM features stay visible.</li>
             </ol>
@@ -90,13 +91,13 @@
 
           <section aria-labelledby="tests-title">
             <h2 id="tests-title">The smoothness tests</h2>
-            <p>These are the tests the design will be judged by. They are written now so the project cannot move the goal after the fact.</p>
+            <p>These are the tests V1 is judged by. They are recorded here so the project cannot move the goal after the fact.</p>
             <ul class="checklist">
-              <li>A new user completes the hello flow with no Java installed. <span class="meta">Not yet testable</span></li>
-              <li>The same three commands work for a plain app, a Spring Boot app and a Quarkus app. <span class="meta">Not yet testable</span></li>
-              <li>A warm run after a one-line change takes seconds, not minutes. <span class="meta">Not yet testable</span></li>
-              <li>Every common error suggests a next step. <span class="meta">Not yet testable</span></li>
-              <li>A project can leave through export without lock-in. <span class="meta">Not yet testable</span></li>
+              <li>A new user completes the hello flow with no Java installed. <span class="meta">Exercised in the source tree; release pending</span></li>
+              <li>The same three commands work for a plain app, a Spring Boot app and a Quarkus app. <span class="meta">After V1</span></li>
+              <li>A warm run after a one-line change is fast. <span class="meta">Exercised in the source tree; timings pending</span></li>
+              <li>Every common error suggests a next step. <span class="meta">Covered by the repository tests</span></li>
+              <li>A project can leave through export without lock-in. <span class="meta">Covered by the repository tests</span></li>
             </ul>
           </section>
 
@@ -104,11 +105,14 @@
             <h2 id="limits-title">What jx will not match</h2>
             <p>Saying what a tool will not do is part of the design. These limits are deliberate.</p>
 
+            <h3>Package management</h3>
+            <p>OS installs stay with Chocolatey, Homebrew, Scoop or the platform's installer. jx is not a package manager.</p>
+
             <h3>Plugin ecosystems</h3>
-            <p>Maven's plugin ecosystem is broad and old. jx will not match it in V1. Delegate mode calls Maven or Gradle, and a plugin host is planned for later.</p>
+            <p>Maven's plugin ecosystem is broad and old. jx does not match it in V1. Delegated builds call Maven or Gradle, so existing plugins run there; a plugin host is planned for later.</p>
 
             <h3>Versioning without SemVer</h3>
-            <p>Java dependencies do not follow SemVer. jx will use compatibility ranges and a conflict policy. It cannot make version numbers mean something they do not.</p>
+            <p>Java dependencies do not follow SemVer. jx uses compatibility ranges and a conflict policy. It cannot make version numbers mean something they do not.</p>
 
             <h3>Maturity</h3>
             <p>Cargo and uv have years of use and many edge cases behind them. jx starts at zero. The comparison is about shape, not experience.</p>
@@ -121,7 +125,7 @@
             <h2 id="scope-title">The scope rule</h2>
             <p class="pullquote">Protect the five-minute happy path first. Widen coverage second.</p>
             <p>A feature that does not help a new project reach a running program waits. That rule is easier to state than to keep. It is written here so the project can be held to it.</p>
-            <p>Read <a href="roadmap.html">the roadmap</a> for the milestones, or start with the <a href="docs/quickstart.html">target quickstart</a>.</p>
+            <p>Read <a href="roadmap.html">the roadmap</a> for the milestones, or start with the <a href="docs/quickstart.html">quickstart</a>.</p>
           </section>
         </div>
       </div>
@@ -132,7 +136,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="vision.html">Vision</a>
@@ -141,7 +145,7 @@
         <a href="accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

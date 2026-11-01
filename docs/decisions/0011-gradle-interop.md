@@ -129,7 +129,7 @@ directory are ambiguous.
   artifacts.
 * A build that computes coordinates, uses a version catalog, or branches on
   the environment cannot be imported; the error names the construct. Those
-  projects keep Gradle, which is the delegate mode still planned for M7.
+  projects keep Gradle and can use the delegated-build mode in ADR 0012.
 * Plugin behaviour beyond the Spring Boot BOM (shading, native images,
   custom source sets, annotation processing) is not reproduced. The notes
   say which plugins were seen.

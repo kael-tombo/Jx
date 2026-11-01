@@ -6,8 +6,8 @@
 //! unsupported packaging, version ranges, unresolved versions or SNAPSHOTs
 //! stop the import instead of producing a manifest that builds differently.
 //!
-//! Gradle import lives in [`gradle`]; delegated Maven/Gradle builds are still
-//! ahead.
+//! Gradle import lives in [`gradle`]. [`delegate`] runs a project's own Maven
+//! or Gradle build with the JDK jx pinned, without evaluating the build.
 
 use std::collections::HashSet;
 
@@ -35,6 +35,7 @@ pub(crate) struct ImportedDependency {
     pub(crate) classifier: Option<String>,
 }
 
+pub mod delegate;
 pub mod gradle;
 
 /// Convert an effective POM into a new jx manifest.

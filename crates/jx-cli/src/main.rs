@@ -4,6 +4,7 @@
 mod build;
 mod deps;
 mod doctor;
+mod engine;
 mod import;
 mod scaffold;
 
@@ -24,6 +25,23 @@ enum ColorArg {
     Never,
 }
 
+#[derive(ValueEnum, Clone, Copy, Debug)]
+enum EngineArg {
+    Jx,
+    Maven,
+    Gradle,
+}
+
+impl From<EngineArg> for manifest::BuildEngine {
+    fn from(value: EngineArg) -> Self {
+        match value {
+            EngineArg::Jx => manifest::BuildEngine::Jx,
+            EngineArg::Maven => manifest::BuildEngine::Maven,
+            EngineArg::Gradle => manifest::BuildEngine::Gradle,
+        }
+    }
+}
+
 impl From<ColorArg> for When {
     fn from(v: ColorArg) -> Self {
         match v {
@@ -41,10 +59,11 @@ impl From<ColorArg> for When {
     about = "A Cargo/uv-style front door for Java",
     long_about = "jx manages JDKs, resolves dependencies from Maven Central into a \
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
-small manifest.\n\nStatus: M7 (interop). Live: jx jdk <command>, jx new/init, \
+small manifest.\n\nStatus: V1 (1.0.0), release hardening complete. \
+Live: jx jdk <command>, jx new/init, \
 jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package/image, \
-jx import (Maven or Gradle), jx export maven/gradle and jx doctor. \
-Compatibility mode and delegated builds are still ahead."
+jx import (Maven or Gradle), jx export maven/gradle, delegated Maven/Gradle \
+builds via `[build] engine` or `--engine`, and jx doctor."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -59,6 +78,10 @@ struct Cli {
     /// Path to project.toml.
     #[arg(long, value_name = "PATH", global = true)]
     manifest_path: Option<PathBuf>,
+    /// Build engine for this invocation: jx, maven or gradle
+    /// (default: [build] engine, else jx)
+    #[arg(long, value_enum, global = true, value_name = "ENGINE")]
+    engine: Option<EngineArg>,
     /// Print full error cause chains.
     #[arg(short = 'v', long, global = true)]
     verbose: bool,
@@ -220,7 +243,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Doctor => doctor::run(cli, colors),
         Command::New { name, lib } => scaffold::new_project(name, *lib),
         Command::Init => scaffold::init_project(),
-        Command::Build => build::build(cli).map(|()| ExitCode::SUCCESS),
+        Command::Build => build::build(cli),
         Command::Run { debug, port, args } => build::run(
             cli,
             if *debug {
@@ -231,7 +254,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
             args.clone(),
         ),
         Command::Jdk(jdk) => run_jdk(cli, jdk).map(|()| ExitCode::SUCCESS),
-        Command::Clean => clean_project(),
+        Command::Clean => build::clean(cli),
         Command::Import {
             path,
             output,
@@ -340,20 +363,6 @@ fn locate_manifest(cli: &Cli) -> Result<PathBuf, JxError> {
     let cwd = std::env::current_dir()
         .map_err(|e| JxError::new(Kind::Io, "cannot read the current directory").caused_by(e))?;
     manifest::find_manifest(&cwd)
-}
-
-fn clean_project() -> Result<ExitCode, JxError> {
-    let here = std::env::current_dir()
-        .map_err(|e| JxError::new(Kind::Io, "cannot read the current directory").caused_by(e))?;
-    let target = here.join("target");
-    if target.is_dir() {
-        std::fs::remove_dir_all(&target).map_err(|e| {
-            JxError::new(Kind::Io, "cannot remove target/")
-                .at(target.display().to_string())
-                .caused_by(e)
-        })?;
-    }
-    Ok(ExitCode::SUCCESS)
 }
 
 #[cfg(test)]

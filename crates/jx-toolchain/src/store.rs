@@ -142,6 +142,7 @@ pub fn ensure_jdk(home: &Path, feature: u32) -> Result<InstalledJdk, JxError> {
             &release.url,
             &archive,
             &release.sha256,
+            release.size,
             &format!("temurin {version}"),
         )?;
     } else {
@@ -154,13 +155,7 @@ pub fn ensure_jdk(home: &Path, feature: u32) -> Result<InstalledJdk, JxError> {
 
 /// Re-verify a cached archive before reuse: the checksum gate stays closed.
 fn verify_cached_archive(archive: &Path, expected: &str) -> Result<(), JxError> {
-    use sha2::Digest as _;
-    let bytes = std::fs::read(archive).map_err(|e| {
-        JxError::new(Kind::Io, "cannot read the cached JDK archive")
-            .at(archive.display().to_string())
-            .caused_by(e)
-    })?;
-    let actual = hex::encode(sha2::Sha256::digest(&bytes));
+    let actual = extract::sha256_file(archive)?;
     if !actual.eq_ignore_ascii_case(expected) {
         std::fs::remove_file(archive).ok();
         return Err(JxError::new(

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Concepts | jx</title>
-  <meta name="description" content="Draft design of the jx manifest, lockfile, resolver and conflict policy.">
+  <meta name="description" content="The jx manifest, lockfile, resolver and conflict policy in V1. Implemented in the source tree; release binaries are pending.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/docs/concepts.html}}">
@@ -33,7 +33,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -52,18 +52,18 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Concepts</h1>
-          <p>A draft design of the manifest, lockfile, resolver and conflict policy. None of it is released.</p>
+          <p>The manifest, lockfile, resolver and conflict policy as implemented in V1. Release binaries are pending.</p>
         </header>
 
-        <p class="note">This page describes intended behaviour. The schema is not final and no command described here is part of a release.</p>
+        <p class="note">This page describes V1 behaviour. The schema is validated by the same parser every command uses.</p>
 
         <h2 id="manifest">Manifest</h2>
         <p>A project has one manifest, <code>project.toml</code>. It names the project, pins a JDK and records dependencies. It also holds the entry point for <code>jx run</code>.</p>
         <div class="code-block">
           <div class="code-head">
-            <span>Illustrative manifest. Not a final schema.</span>
+            <span>Illustrative manifest. Field names match V1.</span>
             <button class="copy-button" type="button" data-copy="manifest-example" aria-label="Copy the illustrative manifest">Copy</button>
           </div>
           <pre><code id="manifest-example">[project]
@@ -78,28 +78,28 @@ guava = "com.google.guava:guava:&lt;version&gt;"
 main = "app.Main"</code></pre>
         </div>
         <p class="copy-status" role="status" aria-live="polite" data-copy-status="manifest-example"></p>
-        <p>Dependency keys are local aliases. Values are Maven coordinates: group, artifact, and a version or a placeholder for one. The final rules for ranges, overrides and platforms are not settled.</p>
+        <p>Dependency keys are local aliases. Values are Maven coordinates: group, artifact, and a version or a placeholder for one. The rules for ranges, overrides and platforms are recorded in the repository's manifest reference.</p>
 
         <h2 id="lockfile">Lockfile</h2>
         <p>The lockfile, <code>jx.lock</code>, records the exact artifacts a build resolved. It is written by jx, not by hand. It is meant to make a build on another machine select the same versions.</p>
-        <p>Each entry would carry a checksum. A changed checksum is a hard error, not a warning. A lockfile that silently accepts a different artifact is worse than no lockfile.</p>
+        <p>Each entry carries a checksum. A changed checksum is a hard error, not a warning. A lockfile that silently accepts a different artifact is worse than no lockfile.</p>
 
         <h2 id="resolver">Resolver</h2>
-        <p>The resolver reads POM metadata from Maven Central and builds a dependency graph. It applies the conflict policy, then writes the lockfile. <code>jx tree</code> and <code>jx why</code> would explain the result.</p>
-        <p>Resolution is planned to be native to jx. Maven and Gradle are not required to resolve a graph.</p>
+        <p>The resolver reads POM metadata from Maven Central and builds a dependency graph. It applies the conflict policy, then writes the lockfile. <code>jx tree</code> and <code>jx why</code> explain the result.</p>
+        <p>Resolution is native to jx. Maven and Gradle are not required to resolve a graph.</p>
 
         <h2 id="conflict-policy">Conflict policy</h2>
-        <p>When two dependencies ask for different versions, the proposed policy is:</p>
+        <p>When two dependencies ask for different versions, the policy is:</p>
         <ul>
           <li>Within one major version, choose the highest compatible version.</li>
           <li>Across majors, stop with a hard error. The project must choose.</li>
         </ul>
-        <p>This is a proposed design, not an accepted guarantee. It favours a visible failure over a silent downgrade. Every replacement would be named in the resolution report.</p>
+        <p>This is the implemented policy. It favours a visible failure over a silent downgrade. Every replacement is named in the resolution report.</p>
         <p>Read the glossary entries for <a href="glossary.html#glossary-resolver">resolver</a> and <a href="glossary.html#glossary-lockfile">lockfile</a>.</p>
 
-        <h2 id="open-questions">What is not decided</h2>
-        <p>Repository configuration, mirrors, credential storage, the final manifest schema and the exact lockfile format are open. They will be recorded as decision records when they settle.</p>
-        <p>Next: the <a href="commands.html">planned commands</a>, or how <a href="maven-gradle.html">Maven and Gradle fit in</a>.</p>
+        <h2 id="open-questions">What can change</h2>
+        <p>Repository configuration, mirrors and credential storage are documented in the repository. The manifest schema and lockfile format are V1; further changes are recorded as decision records.</p>
+        <p>Next: the <a href="commands.html">commands</a>, or how <a href="maven-gradle.html">Maven and Gradle fit in</a>.</p>
       </article>
     </div>
   </main>
@@ -108,7 +108,7 @@ main = "app.Main"</code></pre>
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -117,7 +117,7 @@ main = "app.Main"</code></pre>
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

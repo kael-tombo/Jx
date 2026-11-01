@@ -34,8 +34,8 @@ main = "com.acme.App"                      # optional; else discovered post-buil
                                            # config.toml (ADR 0003); known here only so
                                            # the error can say so
 
-[build]                                    # planned (M7): engine delegation
-engine = "maven"
+[build]                                    # parsed & validated (M7)
+engine = "maven"                           # "jx" (default), "maven" or "gradle"
 ```
 
 ## Rules (target)
@@ -103,3 +103,11 @@ engine = "maven"
   `implementation`, `[dev-dependencies]` become `testImplementation`,
   `[overrides]` become `constraints`, `[run] main` selects the `application`
   plugin and its `mainClass`. Platform BOMs are inlined, not re-exported.
+* `[build]` has one key, `engine`, one of `"jx"` (the default), `"maven"` or
+  `"gradle"`; the global `--engine` flag overrides it for one invocation. A
+  delegated project runs `jx build`/`test`/`clean` through its own Maven or
+  Gradle build with the pinned JDK. Dependency, run, package, image and
+  export commands are refused in that mode because the external build owns
+  dependency resolution, compilation and packaging; pass `--engine jx` to use
+  the manifest's graph for one command. See
+  [decisions/0012-delegated-builds.md](decisions/0012-delegated-builds.md).

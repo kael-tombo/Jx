@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Roadmap | jx</title>
-  <meta name="description" content="Milestones M0 to M8, decision gates and current status for the jx V1 plan. Estimates only; nothing is released.">
+  <meta name="description" content="Milestones M0 to M8, decision gates and current status for jx V1. The source tree is implemented; a tagged release is pending.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/roadmap.html}}">
@@ -32,63 +32,63 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="proposed">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="page">
       <div class="wrap">
         <header class="page-head">
-          <span class="badge" data-status="proposed">Proposed plan</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented · release pending</span>
           <h1>Roadmap.</h1>
-          <p class="lede">Milestones M0 to M8, the gates between them, and the honest status of the V1 plan. Nothing is released.</p>
+          <p class="lede">Milestones M0 to M8, the gates between them, and the honest status of V1. The source tree is complete; the release is pending a tag.</p>
         </header>
 
         <div class="prose">
-          <p class="note">Estimates assume a small team and will change. No dates are set. No milestone is released.</p>
+          <p class="note">M0–M8 are implemented in the source tree. No tagged public release exists. The gates below remain open where they have not been independently verified.</p>
 
           <section aria-labelledby="milestones-title">
             <h2 id="milestones-title">Milestones</h2>
             <ol class="timeline">
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M0</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M0</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Foundations</h3>
                 <p>Workspace, continuous integration, decision records, configuration and diagnostics. The base every later milestone sits on.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M1</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M1</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Toolchain and hello</h3>
                 <p>JDK download and pin, project scaffolding, and a first build and run with no Java installed.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M2</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M2</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Repository and POM model</h3>
                 <p>Maven Central client, cache, checksums, a POM model and dependency version ordering.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M3</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M3</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Resolver</h3>
                 <p>Dependency graph, conflict policy, a reproducible lockfile, and the tree and why commands.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M4</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M4</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Build and test</h3>
                 <p>javac integration, fingerprints that skip unchanged work, resources, and a JUnit launcher.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M5</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M5</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Run and package</h3>
                 <p>Main discovery, a run command, distributions and a jar. Export to Maven.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M6</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M6</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Runtime trimming</h3>
                 <p>jdeps and jlink, with a fallback when a project cannot be trimmed. This is optional packaging for deployment; it does not change what the JDK ships.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M7</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M7</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Maven and Gradle interop</h3>
                 <p>Import, compatibility mode, delegate mode, and exports in both directions.</p>
               </li>
-              <li data-status="proposed">
-                <p class="milestone-meta"><span>M8</span><span class="badge" data-status="proposed">Not released</span></p>
+              <li data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
+                <p class="milestone-meta"><span>M8</span><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></p>
                 <h3>Release hardening</h3>
                 <p>Documentation, an install path, a security review and a launch checklist.</p>
               </li>
@@ -97,17 +97,17 @@
 
           <section aria-labelledby="gates-title">
             <h2 id="gates-title">Decision gates</h2>
-            <p>A milestone cannot close because code exists. It closes when its gate passes.</p>
+            <p>Implementation and verification are separate. These gates remain open or unverified; a tagged release does not close them by itself.</p>
             <ul class="gates">
               <li data-status="proposed">
                 <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
                 <h3>Resolver parity with Maven</h3>
-                <p>A representative set of POMs resolves to the same versions Maven selects. Until this holds, the resolver is not done.</p>
+                <p>A representative set of POMs resolves to the same versions Maven selects. The repository tests pass; an independent Maven parity run is not published.</p>
               </li>
               <li data-status="proposed">
                 <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
                 <h3>Happy-path coverage</h3>
-                <p>A new user completes the hello flow on a machine with no Java installed, following only the published quickstart.</p>
+                <p>A new user completes the hello flow on a machine with no Java installed, following only the published quickstart. The flow has been exercised in the source tree, not by an independent new user.</p>
               </li>
               <li data-status="proposed">
                 <p class="milestone-meta">Gate <span class="badge" data-status="proposed">Open</span></p>
@@ -119,7 +119,7 @@
 
           <section aria-labelledby="reading-title">
             <h2 id="reading-title">How to read this page</h2>
-            <p>Statuses describe the public plan, not private progress. A milestone marked not released has no public release. Estimates will change, and the page will say when they do.</p>
+            <p>Implemented means the source tree contains the work and its tests. It does not mean a gate has passed or that a release exists. The gates record what still needs independent evidence; the page will change when they do.</p>
             <p>The landing page carries a short version of this timeline. The <a href="vision.html">vision</a> explains the tests behind the gates.</p>
           </section>
         </div>
@@ -131,7 +131,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="vision.html">Vision</a>
@@ -140,7 +140,7 @@
         <a href="accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

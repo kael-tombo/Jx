@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -51,7 +51,7 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Design decisions</h1>
           <p>An index of the architecture decision records behind jx and this site.</p>
         </header>
@@ -77,7 +77,7 @@
               </tr>
               <tr>
                 <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0002-temurin-provider.md">0002</a></th>
-                <td>Eclipse Temurin as the proposed default JDK source.</td>
+                <td>Eclipse Temurin as the default JDK source.</td>
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
               <tr>
@@ -111,18 +111,43 @@
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
               <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0010-maven-import.md">0010</a></th>
+                <td>Maven import through the effective POM, with exact direct versions and printed approximations.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0011-gradle-interop.md">0011</a></th>
+                <td>Gradle import for the declarative subset, and Kotlin DSL export from the lockfile.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0012-delegated-builds.md">0012</a></th>
+                <td>Delegated Maven and Gradle builds for projects outside the import subset.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0013-compose-the-ecosystem.md">0013</a></th>
+                <td>Compose the existing Java ecosystem instead of reimplementing its tools.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
                 <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0100-site-design-system.md">0100</a></th>
                 <td>Warm-paper reference-manual design, type scale and contrast pairs for this site.</td>
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
               <tr>
                 <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0101-site-truth-and-status.md">0101</a></th>
-                <td>How the site handles status, placeholders and claims about a tool that is not released.</td>
+                <td>How the site handled status, placeholders and claims before V1 was implemented.</td>
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
               <tr>
                 <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0102-site-fonts-and-assets.md">0102</a></th>
                 <td>Self-hosted fonts under the Open Font License, and offline assets.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0103-site-status-after-v1-implementation.md">0103</a></th>
+                <td>Use implemented for the 1.0.0 source tree; reserve shipped for a tagged release.</td>
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
             </tbody>
@@ -134,7 +159,7 @@
         <p>The template lives beside the records in the repository. A new decision starts as a proposal and becomes accepted only after review.</p>
 
         <h2 id="site">Why the site has records</h2>
-        <p>The website is a design artifact too. Its type scale, truth rules and fonts are recorded so a later change can argue with a decision instead of guessing at one. The three site records use numbers from 0100 so they stay clear of the tool's own ADR sequence.</p>
+        <p>The website is a design artifact too. Its type scale, truth rules and fonts are recorded so a later change can argue with a decision instead of guessing at one. The site records use numbers from 0100 so they stay clear of the tool's own ADR sequence.</p>
       </article>
     </div>
   </main>
@@ -143,7 +168,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -152,7 +177,7 @@
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

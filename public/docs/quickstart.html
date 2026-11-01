@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quickstart (target experience) | jx</title>
-  <meta name="description" content="The planned first five minutes with jx. A draft: there is no release yet.">
+  <title>Quickstart | jx</title>
+  <meta name="description" content="The first five minutes with jx. V1 is implemented; release binaries are pending.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/docs/quickstart.html}}">
@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -51,35 +51,40 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Quickstart</h1>
-          <p>The planned first five minutes with jx. There is no release yet.</p>
+          <p>The first five minutes with jx. V1 is implemented; release binaries are pending.</p>
         </header>
 
-        <p class="note">Target experience. Nothing on this page is a recording or a supported install.</p>
+        <p class="note">These commands are implemented in the source tree. Until release binaries publish, build from source; this is not yet a supported install.</p>
 
-        <h2>The target</h2>
-        <p>One terminal. No Java installed. Five minutes later, a program runs. That is the whole promise the design is built around.</p>
-        <p>The first release is planned for plain Java. The same <code>jx new</code> and <code>jx run</code> flow is the target for Spring Boot, Quarkus, Vert.x and Jakarta EE later.</p>
+        <h2>The first five minutes</h2>
+        <p>One terminal. No Java installed. Five minutes later, a program runs. That is the whole promise V1 is built around.</p>
+        <p>V1 covers plain Java. The same <code>jx new</code> and <code>jx run</code> flow is the target for Spring Boot, Quarkus, Vert.x and Jakarta EE later.</p>
 
         <ol class="steps">
           <li>
             <h3>Open a terminal</h3>
-            <p>There is no installation method yet. When a release exists, the install step will be documented here with the download source and its checksum.</p>
+            <p>The release archives and installers publish from the v1.0.0 tag. Until then, build from source with a Rust toolchain (edition 2024); the archive step will be documented here with its download source and checksum when the release is published.</p>
+            <div class="code-block">
+              <div class="code-head"><span>Build from source</span></div>
+              <pre><code>cargo build --release</code></pre>
+            </div>
+            <p>The binary is under <code>target/release/</code>; add that directory to <code>PATH</code> or call the binary directly.</p>
           </li>
           <li>
             <h3>Create a project</h3>
-            <p>jx would write a manifest, a source file and a pinned JDK.</p>
+            <p>jx writes a manifest, a source file and a pinned JDK.</p>
             <div class="code-block">
-              <div class="code-head"><span>Target command</span></div>
+              <div class="code-head"><span>Command</span></div>
               <pre><code>jx new hello &amp;&amp; cd hello</code></pre>
             </div>
           </li>
           <li>
             <h3>Run it</h3>
-            <p>The first run would fetch the pinned JDK, compile the source and start the program.</p>
+            <p>The first run fetches the pinned JDK, compiles the source and starts the program.</p>
             <div class="code-block">
-              <div class="code-head"><span>Target command</span></div>
+              <div class="code-head"><span>Command</span></div>
               <pre><code>jx run</code></pre>
             </div>
             <div class="code-block">
@@ -89,9 +94,9 @@
           </li>
           <li>
             <h3>Make a change</h3>
-            <p>Edit the main class, then run the same command again. The design target is a warm run that skips work that did not change.</p>
+            <p>Edit the main class, then run the same command again. A warm run skips work that did not change.</p>
             <div class="code-block">
-              <div class="code-head"><span>Target command</span></div>
+              <div class="code-head"><span>Command</span></div>
               <pre><code>jx run</code></pre>
             </div>
           </li>
@@ -102,14 +107,14 @@
           </li>
         </ol>
 
-        <h2>What is not here</h2>
-        <p>No install command, no download and no release. The quickstart is a target for the first release, not a supported install. The <a href="../roadmap.html">roadmap</a> names the milestones that would change that.</p>
+        <h2>Release status</h2>
+        <p>No tagged release exists yet, so there is no supported install. The commands on this page are implemented in the source tree and covered by the repository tests. The archive, checksum and installer step will be added when v1.0.0 is tagged.</p>
 
         <h2>Where to go next</h2>
         <ul>
           <li><a href="concepts.html">Concepts</a>: manifest, lockfile, resolver and conflict policy.</li>
-          <li><a href="commands.html">Commands</a>: the planned command set.</li>
-          <li><a href="maven-gradle.html">Maven and Gradle</a>: the planned way in and the way out.</li>
+          <li><a href="commands.html">Commands</a>: the command set.</li>
+          <li><a href="maven-gradle.html">Maven and Gradle</a>: the way in and the way out.</li>
         </ul>
       </article>
     </div>
@@ -119,7 +124,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -128,7 +133,7 @@
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

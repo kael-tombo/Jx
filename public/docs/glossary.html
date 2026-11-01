@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Glossary | jx</title>
-  <meta name="description" content="Terms used in the jx design documents.">
+  <meta name="description" content="Terms used in the jx documentation.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/docs/glossary.html}}">
@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -51,17 +51,17 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Glossary</h1>
-          <p>Terms used in the jx design documents, in plain language.</p>
+          <p>Terms used in the jx documentation, in plain language.</p>
         </header>
 
-        <p class="note">Definitions describe the proposed design. They do not claim that any term is implemented.</p>
+        <p class="note">Definitions describe V1 behaviour. Terms marked after V1 are not implemented yet.</p>
 
         <dl class="glossary">
           <div>
             <dt id="glossary-adapter">Adapter</dt>
-            <dd>A planned component that connects <code>jx run</code> to a framework such as Spring Boot, Quarkus, Vert.x or Jakarta EE. Adapters are after V1.</dd>
+            <dd>A post-V1 component that connects <code>jx run</code> to a framework such as Spring Boot, Quarkus, Vert.x or Jakarta EE.</dd>
           </div>
           <div>
             <dt id="glossary-adr">ADR</dt>
@@ -69,19 +69,19 @@
           </div>
           <div>
             <dt id="glossary-compatibility-mode">Compatibility mode</dt>
-            <dd>A planned mode where jx uses an existing Maven or Gradle build while supplying its own toolchain and commands.</dd>
+            <dd>The mode where jx keeps an existing Maven or Gradle build and delegates build, test and clean to it, while supplying the pinned JDK and command surface.</dd>
           </div>
           <div>
             <dt id="glossary-conflict-policy">Conflict policy</dt>
-            <dd>The rule used when two dependencies ask for different versions. Proposed: highest compatible version within a major; a hard error across majors.</dd>
+            <dd>The rule used when two dependencies ask for different versions: highest compatible version within a major; a hard error across majors.</dd>
           </div>
           <div>
             <dt id="glossary-delegate-mode">Delegate mode</dt>
-            <dd>A planned mode where jx calls Maven or Gradle to perform a build.</dd>
+            <dd>Another name for compatibility mode: jx calls Maven or Gradle rather than running its own pipeline.</dd>
           </div>
           <div>
             <dt id="glossary-design-preview">Design preview</dt>
-            <dd>This website. It describes a proposal and is not a release of the tool.</dd>
+            <dd>This website. It describes V1 and is not a release archive.</dd>
           </div>
           <div>
             <dt id="glossary-jdk">JDK</dt>
@@ -97,7 +97,7 @@
           </div>
           <div>
             <dt id="glossary-maven-central">Maven Central</dt>
-            <dd>The public repository where Java libraries are published. jx plans to reuse it, not replace it.</dd>
+            <dd>The public repository where Java libraries are published. jx reuses it and does not replace it.</dd>
           </div>
           <div>
             <dt id="glossary-maven-layout">Maven standard layout</dt>
@@ -105,15 +105,15 @@
           </div>
           <div>
             <dt id="glossary-milestone">Milestone</dt>
-            <dd>A named stage of the plan, M0 to M8, with a decision gate before it closes.</dd>
+            <dd>A named stage of the V1 build, M0 to M8. The implementation is complete; the roadmap keeps the decision gates visible.</dd>
           </div>
           <div>
             <dt id="glossary-platform-tool">Platform tool</dt>
-            <dd>A single command-line tool that owns an ecosystem's everyday workflow: one manifest, one command set, dependency resolution and builds. Cargo, uv and npm are examples. jx is an independent proposal for Java, not an official platform tool.</dd>
+            <dd>A single command-line tool that owns an ecosystem's everyday workflow: one manifest, one command set, dependency resolution and builds. Cargo, uv and npm are examples. jx is an independent implementation for Java, not an official platform tool.</dd>
           </div>
           <div>
             <dt id="glossary-pom">POM</dt>
-            <dd>Maven's project object model. jx would read POM metadata to resolve dependencies.</dd>
+            <dd>Maven's project object model. jx reads POM metadata to resolve dependencies.</dd>
           </div>
           <div>
             <dt id="glossary-resolver">Resolver</dt>
@@ -125,7 +125,7 @@
           </div>
           <div>
             <dt id="glossary-status">Status</dt>
-            <dd>A word on this site that says how settled a claim is: idea, draft, proposed, accepted, implemented or shipped. The last two are not used until a release exists.</dd>
+            <dd>A word on this site that says how settled a claim is: idea, draft, proposed, accepted, implemented or shipped. Implemented means the 1.0.0 source tree contains the behaviour and tests; shipped means a tagged release contains it. No page uses shipped yet.</dd>
           </div>
           <div>
             <dt id="glossary-toolchain">Toolchain</dt>
@@ -133,7 +133,7 @@
           </div>
           <div>
             <dt id="glossary-v1">V1</dt>
-            <dd>The first planned release. Its scope is Java only, with the Maven standard layout.</dd>
+            <dd>The first public version, 1.0.0. Its scope is Java only, with the Maven standard layout. The source tree is complete; a tag is pending.</dd>
           </div>
           <div>
             <dt id="glossary-vision">Vision</dt>
@@ -151,7 +151,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -160,7 +160,7 @@
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

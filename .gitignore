@@ -5,3 +5,7 @@
 /playwright-report
 /.lighthouseci
 /docs/screenshots
+
+/dist
+/.jx-test-release
+.jx-test-server.pid

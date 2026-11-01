@@ -8,3 +8,6 @@ publish = false
 [dependencies]
 jx-common = { workspace = true }
 jx-maven = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

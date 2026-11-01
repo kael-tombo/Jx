@@ -49,6 +49,9 @@ pub struct JdkRelease {
     /// sha256 hex digest of the archive as published by the provider; a
     /// missing/blank checksum is a resolve error (jx refuses unverified JDKs).
     pub sha256: String,
+    /// Archive size in bytes when the provider states it, used as the
+    /// download budget instead of jx's fixed fallback.
+    pub size: Option<u64>,
     pub archive_extension: &'static str,
 }
 
@@ -83,6 +86,8 @@ struct Package {
     link: String,
     #[serde(default)]
     checksum: Option<String>,
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 /// The default provider for V1.
@@ -154,6 +159,7 @@ impl JdkProvider for Temurin {
             // The name is guaranteed for real assets; this keeps the type shape simple.
             format!("jdk-{feature}")
         });
+        let size = package.size.filter(|size| *size > 0);
         let checksum = package
             .checksum
             .filter(|c| c.len() == 64 && c.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -170,6 +176,7 @@ impl JdkProvider for Temurin {
             release_name,
             url: package.link,
             sha256: checksum,
+            size,
             archive_extension: archive_extension(),
         })
     }

@@ -1,7 +1,7 @@
 # 0101. Website truth, status and placeholders
 
 Date: 2026-10-31
-Status: accepted
+Status: Superseded by ADR 0103 for the `implemented` status and public milestone visibility; the placeholder, checker and indexing rules still apply.
 
 ## Context and problem
 

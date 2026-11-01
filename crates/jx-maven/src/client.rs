@@ -22,6 +22,7 @@
 use std::collections::HashMap;
 use std::io::Read as _;
 use std::path::Path;
+use std::sync::Once;
 
 use base64::Engine as _;
 use jx_common::config::{AuthRef, Mirror, Repository, Settings};
@@ -95,7 +96,7 @@ impl Client {
         for proxy_url in candidate_proxies(&settings) {
             let proxy = ureq::Proxy::new(&proxy_url).map_err(|e| {
                 JxError::new(Kind::Network, "invalid proxy URL")
-                    .at(proxy_url.clone())
+                    .at(redact_userinfo(&proxy_url))
                     .caused_by(e)
                     .hint("proxy URLs look like `http://host:port`")
             })?;
@@ -451,6 +452,9 @@ impl Client {
     }
 
     fn http_get(&self, url: &str, auth: Option<&AuthRef>) -> Result<HttpGet, JxError> {
+        if auth.is_some() && plaintext_auth_risk(url) {
+            warn_plaintext_auth_once();
+        }
         let agent = self.agent_for(url);
         let mut request = agent.get(url);
         if let Some(header) = auth_header(auth)? {
@@ -486,6 +490,17 @@ impl Client {
                     .hint("check connectivity or the proxy settings in config.toml"));
             }
         };
+        // ureq refuses to forward `Authorization` across redirects, and the
+        // checksum still verifies the bytes; this closes the remaining
+        // downgrade so an HTTPS fetch cannot silently become plaintext.
+        if url.starts_with("https://") && response.get_url().starts_with("http://") {
+            return Err(JxError::new(
+                Kind::Network,
+                "the repository redirected an HTTPS request to plain HTTP",
+            )
+            .at(response.get_url())
+            .hint("refusing the downgrade; check the repository URL or a proxy that rewrites redirects"));
+        }
         let headers: Vec<(String, String)> = response
             .headers_names()
             .into_iter()
@@ -801,6 +816,46 @@ fn make_agent() -> ureq::AgentBuilder {
         .timeout_read(std::time::Duration::from_secs(120))
 }
 
+/// True when a credential would cross the network without TLS. Loopback is
+/// exempt because it never leaves the machine (and the test suite needs it).
+/// Remove `user:password@` from a URL before it reaches a diagnostic. Proxy
+/// URLs may legitimately carry credentials; error output must not.
+fn redact_userinfo(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let (authority, tail) = match rest.split_once('/') {
+        Some((authority, tail)) => (authority, format!("/{tail}")),
+        None => (rest, String::new()),
+    };
+    match authority.rsplit_once('@') {
+        Some((_, host)) => format!("{scheme}://***@{host}{tail}"),
+        None => url.to_string(),
+    }
+}
+
+fn plaintext_auth_risk(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let host = if let Some(v6) = authority.strip_prefix('[') {
+        v6.split(']').next().unwrap_or(v6)
+    } else {
+        authority.split(':').next().unwrap_or(authority)
+    };
+    !matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
+fn warn_plaintext_auth_once() {
+    static WARNED: Once = Once::new();
+    WARNED.call_once(|| {
+        eprintln!(
+            "warning: sending repository credentials over plain HTTP; prefer https:// in config.toml"
+        );
+    });
+}
+
 /// sha256 of a path, the by-path cache index file name.
 fn path_index_name(repo_path: &str) -> String {
     hex::encode(Sha256::digest(repo_path.as_bytes()))
@@ -901,6 +956,29 @@ mod tests {
         assert_eq!(host_of("https://a.b:8080/path"), Some("a.b".to_string()));
         assert_eq!(host_of("http://a.b/"), Some("a.b".to_string()));
         assert_eq!(host_of("file:///x"), None);
+    }
+
+    #[test]
+    fn proxy_credentials_are_redacted_in_diagnostics() {
+        assert_eq!(
+            redact_userinfo("http://user:secret@proxy.corp:3128"),
+            "http://***@proxy.corp:3128"
+        );
+        assert_eq!(
+            redact_userinfo("http://proxy.corp:3128"),
+            "http://proxy.corp:3128"
+        );
+        assert_eq!(redact_userinfo("https://a@b/c"), "https://***@b/c");
+    }
+
+    #[test]
+    fn plaintext_auth_allows_loopback_only() {
+        assert!(!plaintext_auth_risk("https://repo.example.com/maven"));
+        assert!(!plaintext_auth_risk("http://localhost:8080/maven"));
+        assert!(!plaintext_auth_risk("http://127.0.0.1:8080/maven"));
+        assert!(!plaintext_auth_risk("http://[::1]:8080/maven"));
+        assert!(plaintext_auth_risk("http://repo.example.com/maven"));
+        assert!(plaintext_auth_risk("http://10.0.0.5/maven"));
     }
 
     #[test]

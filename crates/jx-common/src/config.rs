@@ -342,6 +342,22 @@ fn check_http_url(entry: &str, url: &str) -> Result<(), JxError> {
             format!("`{entry}` url must start with `http://` or `https://`: {url:?}"),
         ));
     }
+    // Userinfo in a URL is a credential in a file (and in every diagnostic
+    // that prints the URL). Auth references are the only supported form.
+    let authority = url
+        .split_once("://")
+        .map(|(_, rest)| rest.split('/').next().unwrap_or(rest))
+        .unwrap_or_default();
+    if authority.contains('@') {
+        return Err(JxError::new(
+            Kind::Io,
+            format!("`{entry}` url must not embed credentials"),
+        )
+        .hint(
+            "remove `user:password@` from the URL and use `auth = \"env:VAR\"` or \
+             `auth = \"bearer:env:VAR\"` instead",
+        ));
+    }
     Ok(())
 }
 
@@ -472,6 +488,18 @@ no_proxy = "localhost, *.corp.example.com"
         );
         let e = load(dir.path()).unwrap_err();
         assert!(e.message.contains("env:VAR"), "{e}");
+    }
+
+    #[test]
+    fn credentials_embedded_in_a_url_are_rejected() {
+        let dir = tempdir().unwrap();
+        write_config(
+            dir.path(),
+            "[repositories]\ninternal = { url = \"https://user:secret@repo.example.com/maven\" }\n",
+        );
+        let e = load(dir.path()).unwrap_err();
+        assert!(e.message.contains("must not embed credentials"), "{e}");
+        assert!(e.hint.unwrap_or_default().contains("env:VAR"));
     }
 
     #[test]

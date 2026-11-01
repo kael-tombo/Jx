@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Maven and Gradle | jx</title>
-  <meta name="description" content="How jx plans to work with existing Maven and Gradle projects: export, import, compatibility and delegate modes.">
+  <meta name="description" content="How jx works with existing Maven and Gradle projects: export, import and delegated builds.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/docs/maven-gradle.html}}">
@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -51,49 +51,43 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Maven and Gradle</h1>
-          <p>How jx plans to work with existing Maven and Gradle projects: export, import, compatibility and delegate modes.</p>
+          <p>How jx works with existing Maven and Gradle projects: export, import and delegated builds.</p>
         </header>
 
-        <p class="note">Everything on this page is planned. No mode runs today.</p>
+        <p class="note">Export, import and delegated builds are implemented in V1. Delegated builds cover the build, test and clean lifecycle; jx does not read the delegate's dependency graph.</p>
 
         <h2 id="position">Position</h2>
-        <p>jx does not replace Maven or Gradle. It reuses Maven Central and keeps the existing build tools reachable. The design has four levels of contact with them.</p>
+        <p>jx does not replace Maven or Gradle. It reuses Maven Central and keeps the existing build tools reachable. V1 has three levels of contact with them.</p>
         <p>The destination is everyday work through commands such as <code>jx run</code>. Maven and Gradle stay available when a project needs them.</p>
 
-        <h2 id="modes">The four modes</h2>
+        <h2 id="modes">The interop modes</h2>
         <section class="table-wrap" aria-labelledby="modes-caption" tabindex="0">
           <table>
-            <caption id="modes-caption">The four planned interop levels. All are planned for V1.</caption>
+            <caption id="modes-caption">The interop levels implemented in V1.</caption>
             <thead>
               <tr>
                 <th scope="col">Mode</th>
-                <th scope="col">What it would do</th>
+                <th scope="col">What it does</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <th scope="row">Export</th>
-                <td>Write a Maven or Gradle build from the jx manifest.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
-              </tr>
-              <tr>
-                <th scope="row">Import</th>
-                <td>Read an existing Maven or Gradle project into a jx manifest.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
-              </tr>
-              <tr>
-                <th scope="row">Compatibility mode</th>
-                <td>Use the existing build files while jx supplies the toolchain and commands.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
-              </tr>
-              <tr>
-                <th scope="row">Delegate mode</th>
-                <td>Call Maven or Gradle for the build.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
-              </tr>
+            <tbody>                <tr>
+                  <th scope="row">Export</th>
+                  <td>Write a Maven or Gradle build from the jx manifest.</td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Import</th>
+                  <td>Read an existing Maven or Gradle project into a jx manifest.</td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Delegated builds</th>
+                  <td>Run the project's own Maven or Gradle build for build, test and clean, with jx supplying the pinned JDK and command surface.</td>
+                  <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+                </tr>
             </tbody>
           </table>
         </section>
@@ -101,15 +95,15 @@
         <p class="pullquote">Import is the entrance. Export is the exit.</p>
 
         <h2 id="gradle">Gradle coverage</h2>
-        <p>Gradle support covers a declarative subset of the build model. Projects outside that subset would use delegate mode, where Gradle performs the build and jx supplies the commands around it.</p>
-        <p>The subset is not final. It will be documented when it is settled, with the cases it cannot express named in public.</p>
+        <p>Gradle support covers a declarative subset of the build model. Projects outside that subset can use delegated builds, where Gradle performs the build and jx supplies the pinned JDK and command surface.</p>
+        <p>The subset is defined in ADR 0011 and documented in the repository, with the cases it cannot express named in public.</p>
 
         <h2 id="plugins">Maven plugins</h2>
-        <p>Maven plugins are not run natively in V1. Delegate mode calls Maven or Gradle, so an existing plugin setup can still run. A plugin host is planned for later.</p>
+        <p>Maven plugins are not run natively in V1. Delegated builds call Maven or Gradle, so an existing plugin setup can still run there. A plugin host is planned for later.</p>
 
         <h2 id="exit">The exit</h2>
         <p>Export is the promise that a project can leave. A jx project can become a Maven or Gradle project with a build file those tools understand. A one-way conversion would be lock-in, and lock-in is a non-goal.</p>
-        <p>See the planned <a href="commands.html">commands</a> for import and export, or the <a href="concepts.html">concepts</a> behind the manifest.</p>
+        <p>See the <a href="commands.html">commands</a> for import and export, or the <a href="concepts.html">concepts</a> behind the manifest.</p>
       </article>
     </div>
   </main>
@@ -118,7 +112,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -127,7 +121,7 @@
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

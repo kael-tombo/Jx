@@ -41,6 +41,8 @@ pub(crate) struct Classpaths {
     pub all_jars: Vec<LockedJar>,
     /// The JUnit Platform console standalone jar, when the project depends on it.
     pub junit_launcher: Option<PathBuf>,
+    /// Version of that launcher, used to choose the compatible invocation.
+    pub junit_launcher_version: Option<String>,
 }
 
 struct Project {
@@ -52,9 +54,15 @@ struct Project {
 }
 
 impl Project {
-    fn open(cli: &Cli) -> Result<Project, JxError> {
+    fn open(cli: &Cli, command: &str) -> Result<Project, JxError> {
         let manifest_path = crate::locate_manifest(cli)?;
         let manifest = manifest::parse(&manifest_path)?;
+        crate::engine::require_jx(
+            cli,
+            &manifest,
+            command,
+            "the delegated build owns dependency resolution, so project.toml is not its graph",
+        )?;
         let manifest_dir = manifest_path
             .parent()
             .expect("manifest path always has a parent")
@@ -101,7 +109,7 @@ struct LockReport {
 /// `jx lock`: resolve and write the lockfile, fetching artifact bytes to
 /// record their sha256. `--locked` makes any difference a hard failure.
 pub fn lock(cli: &Cli) -> Result<(), JxError> {
-    let project = Project::open(cli)?;
+    let project = Project::open(cli, "jx lock")?;
     let report = write_lock(cli, &project)?;
     print_lock_summary(&project, &report);
     Ok(())
@@ -110,7 +118,7 @@ pub fn lock(cli: &Cli) -> Result<(), JxError> {
 /// `jx fetch`: download exactly what the lockfile pins, verifying every
 /// checksum against it. Cached entries are re-verified, not trusted.
 pub fn fetch(cli: &Cli) -> Result<(), JxError> {
-    let project = Project::open(cli)?;
+    let project = Project::open(cli, "jx fetch")?;
     let lock = read_lock_for(&project)?;
     if let Some(pin) = &lock.jdk {
         ensure_locked_jdk(&project.home, pin, cli.offline)?;
@@ -126,7 +134,7 @@ pub fn fetch(cli: &Cli) -> Result<(), JxError> {
 
 /// `jx tree`: the resolved graph, conflicts and (verbose) skip reasons.
 pub fn tree(cli: &Cli) -> Result<(), JxError> {
-    let project = Project::open(cli)?;
+    let project = Project::open(cli, "jx tree")?;
     let resolution = project.resolve()?;
     print_tree(&resolution, cli.verbose);
     Ok(())
@@ -134,7 +142,7 @@ pub fn tree(cli: &Cli) -> Result<(), JxError> {
 
 /// `jx why <group:artifact[:version]>`: one path from a manifest root.
 pub fn why(cli: &Cli, coord: &str) -> Result<(), JxError> {
-    let project = Project::open(cli)?;
+    let project = Project::open(cli, "jx why")?;
     let resolution = project.resolve()?;
     let (group_id, artifact_id, wanted_version) = parse_why_target(coord)?;
     why_in(
@@ -162,7 +170,7 @@ pub fn add(
         )
         .hint("drop --locked for this edit, or update project.toml by hand"));
     }
-    let mut project = Project::open(cli)?;
+    let mut project = Project::open(cli, "jx add")?;
     let table = table_of(dev);
 
     // Parse under a temporary empty alias first: the artifact id is the
@@ -225,7 +233,7 @@ pub fn remove(cli: &Cli, alias: &str, dev: bool) -> Result<(), JxError> {
         )
         .hint("drop --locked for this edit, or update project.toml by hand"));
     }
-    let mut project = Project::open(cli)?;
+    let mut project = Project::open(cli, "jx remove")?;
     let table = table_of(dev);
     let other = if dev {
         DepTable::Dependencies
@@ -350,7 +358,7 @@ fn latest_version(client: &Client, spec: &DependencySpec) -> Result<String, JxEr
 /// existing lock is served from the cache; a missing or older-than-manifest
 /// lock is refreshed first. Returns absolute cache paths, never jar bytes.
 pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
-    let project = Project::open(cli)?;
+    let project = Project::open(cli, "jx build")?;
     let declared = !project.manifest.dependencies.is_empty()
         || !project.manifest.dev_dependencies.is_empty()
         || !project.manifest.overrides.is_empty();
@@ -363,6 +371,7 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
                 test: Vec::new(),
                 all_jars: Vec::new(),
                 junit_launcher: None,
+                junit_launcher_version: None,
             });
         }
         if cli.locked {
@@ -408,6 +417,7 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
     let mut test = Vec::new();
     let mut all_jars = Vec::new();
     let mut junit_launcher = None;
+    let mut junit_launcher_version = None;
     for artifact in &lock.artifacts {
         let path = cache.path_of(&artifact.sha256)?;
         let jar = LockedJar {
@@ -424,6 +434,7 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
         }
         if artifact.artifact_id == "junit-platform-console-standalone" {
             junit_launcher = Some(path.clone());
+            junit_launcher_version = Some(artifact.version.clone());
         }
         test.push(path);
     }
@@ -433,6 +444,7 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
         test,
         all_jars,
         junit_launcher,
+        junit_launcher_version,
     })
 }
 
@@ -980,5 +992,6 @@ mod tests {
             cp.junit_launcher,
             Some(cache.path_of(&launcher_sha).unwrap())
         );
+        assert_eq!(cp.junit_launcher_version.as_deref(), Some("1.0"));
     }
 }

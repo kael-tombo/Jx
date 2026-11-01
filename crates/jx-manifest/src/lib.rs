@@ -3,8 +3,9 @@
 //! Scope: the `[project]` table is parsed strictly (unknown keys are errors
 //! with a did-you-mean suggestion), `[dependencies]`/`[dev-dependencies]`
 //! entries are validated coordinate shapes (`deps` module; their selection
-//! semantics belong to the resolver), `[run]` re-parsed as in M1, other
-//! reserved tables are recognized opaquely, and unknown tables are rejected.
+//! semantics belong to the resolver), `[run]` is re-parsed as in M1, `[build]`
+//! selects the build engine, other reserved tables are recognized opaquely,
+//! and unknown tables are rejected.
 //! The checkout of values that `jx build`/`run` need today lives in
 //! [`Manifest::jdk_feature`] and [`Manifest::main_class`]. The target format
 //! is specified in docs/manifest.md; `set_jdk` performs a comment- and
@@ -20,7 +21,7 @@ pub use deps::{DependencySpec, WantedVersion};
 pub use edit::{DepTable, add_dependency, has_alias, remove_dependency};
 
 /// Tables jx's manifest supports or reserves for upcoming milestones.
-const KNOWN_TABLES: [&str; 7] = [
+const KNOWN_TABLES: [&str; 8] = [
     "project",
     "dependencies",
     "dev-dependencies",
@@ -28,10 +29,60 @@ const KNOWN_TABLES: [&str; 7] = [
     "overrides",
     "run",
     "repositories",
+    "build",
 ];
 
 /// Keys allowed inside `[project]`.
 const PROJECT_KEYS: [&str; 3] = ["name", "version", "jdk"];
+
+/// Keys allowed inside `[build]`.
+const BUILD_KEYS: [&str; 1] = ["engine"];
+
+/// Which engine owns the project's build.
+///
+/// `Jx` is the default and the only mode in which jx compiles, tests and
+/// packages by itself. `Maven` and `Gradle` delegate the lifecycle to the
+/// project's own build tool while jx still pins and installs the JDK. In a
+/// delegated project the external build owns dependency resolution too, so the
+/// manifest's dependency commands are refused rather than allowed to describe
+/// a graph the build does not use (ADR 0012).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BuildEngine {
+    /// jx's own javac/JUnit/packaging pipeline.
+    #[default]
+    Jx,
+    Maven,
+    Gradle,
+}
+
+impl BuildEngine {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BuildEngine::Jx => "jx",
+            BuildEngine::Maven => "maven",
+            BuildEngine::Gradle => "gradle",
+        }
+    }
+
+    pub fn is_delegated(self) -> bool {
+        !matches!(self, BuildEngine::Jx)
+    }
+
+    /// `[build] engine = "…"`, rejected with the allowed set when unknown.
+    pub fn parse(raw: &str, path: &Path) -> Result<Self, JxError> {
+        match raw.trim() {
+            "jx" => Ok(BuildEngine::Jx),
+            "maven" => Ok(BuildEngine::Maven),
+            "gradle" => Ok(BuildEngine::Gradle),
+            other => Err(JxError::new(
+                Kind::Manifest,
+                format!("[build] engine = {other:?} is not a build engine jx knows"),
+            )
+            .at(path.display().to_string())
+            .hint("use `engine = \"jx\"`, `\"maven\"` or `\"gradle\"`")),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
@@ -47,6 +98,8 @@ pub struct Manifest {
     pub dev_dependencies: Vec<deps::DependencySpec>,
     /// `[overrides]`, validated shapes: explicit, always-visible pins (ADR 0004).
     pub overrides: Vec<deps::OverrideSpec>,
+    /// `[build] engine`; `Jx` unless the project delegates its build.
+    pub build_engine: BuildEngine,
 }
 
 use jx_common::diagnose::{closest, unknown_key_error as shared_unknown_key_error};
@@ -175,6 +228,26 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
             .hint("add jdk = \"25\" (V1 pins a feature release into project.toml)")
     })?;
 
+    let mut build_engine = BuildEngine::Jx;
+    if let Some(build) = table.get("build") {
+        let build = build.as_table().ok_or_else(|| {
+            JxError::new(Kind::Manifest, "[build] must be a table").at(path.display().to_string())
+        })?;
+        for key in build.keys() {
+            if !BUILD_KEYS.contains(&key.as_str()) {
+                return Err(unknown_key_error("build", key, &BUILD_KEYS));
+            }
+        }
+        if let Some(value) = build.get("engine") {
+            let raw = value.as_str().ok_or_else(|| {
+                JxError::new(Kind::Manifest, "[build] engine must be a string")
+                    .at(path.display().to_string())
+                    .hint("use `engine = \"jx\"`, `\"maven\"` or `\"gradle\"`")
+            })?;
+            build_engine = BuildEngine::parse(raw, path)?;
+        }
+    }
+
     if let Some(run) = table.get("run") {
         if let Some(run) = run.as_table() {
             for key in run.keys() {
@@ -223,6 +296,7 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
         dependencies,
         dev_dependencies,
         overrides,
+        build_engine,
     })
 }
 
@@ -326,6 +400,49 @@ mod tests {
         );
         let m = parse(&p).unwrap();
         assert_eq!(m.main.as_deref(), Some("app.App"));
+    }
+
+    #[test]
+    fn build_engine_defaults_to_jx_and_parses_the_delegates() {
+        let dir = tempdir().unwrap();
+        let base = "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n";
+        let p = manifest_at(dir.path(), base);
+        assert_eq!(parse(&p).unwrap().build_engine, BuildEngine::Jx);
+
+        for (raw, expected) in [
+            ("maven", BuildEngine::Maven),
+            ("gradle", BuildEngine::Gradle),
+            ("jx", BuildEngine::Jx),
+        ] {
+            let p = manifest_at(
+                dir.path(),
+                &format!("{base}\n[build]\nengine = \"{raw}\"\n"),
+            );
+            assert_eq!(parse(&p).unwrap().build_engine, expected, "{raw}");
+        }
+    }
+
+    #[test]
+    fn build_engine_is_strict() {
+        let dir = tempdir().unwrap();
+        let base = "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n";
+
+        let p = manifest_at(dir.path(), &format!("{base}\n[build]\nengine = \"ant\"\n"));
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("not a build engine"), "{e}");
+        assert!(e.hint.is_some_and(|h| h.contains("gradle")));
+
+        let p = manifest_at(dir.path(), &format!("{base}\n[build]\nengine = 1\n"));
+        assert!(parse(&p).unwrap_err().message.contains("must be a string"));
+
+        let p = manifest_at(dir.path(), &format!("{base}\n[build]\nengin = \"maven\"\n"));
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("unknown key `engin`"), "{e}");
+        assert!(e.message.contains("did you mean `engine`"), "{e}");
+
+        let p = manifest_at(dir.path(), &format!("build = \"maven\"\n\n{base}"));
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("must be a table"), "{e}");
     }
 
     #[test]

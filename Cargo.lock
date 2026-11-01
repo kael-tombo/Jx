@@ -462,7 +462,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jx-build"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "hex",
  "jx-common",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "jx-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "fs4",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "jx-common"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "hex",
  "serde",
@@ -505,15 +505,16 @@ dependencies = [
 
 [[package]]
 name = "jx-interop"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "jx-maven",
+ "tempfile",
 ]
 
 [[package]]
 name = "jx-lock"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "tempfile",
@@ -522,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "jx-manifest"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "tempfile",
@@ -531,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "jx-maven"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "base64",
  "hex",
@@ -549,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "jx-package"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "tempfile",
@@ -558,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "jx-resolve"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "jx-manifest",
@@ -569,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "jx-run"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jx-common",
  "tempfile",
@@ -577,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "jx-testsupport"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "base64",
  "hex",
@@ -588,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "jx-toolchain"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "flate2",
  "hex",

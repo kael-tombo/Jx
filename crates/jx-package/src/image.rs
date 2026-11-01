@@ -2,9 +2,14 @@
 //!
 //! `jdeps --print-module-deps` proposes a module set; `jlink` turns it into a
 //! runtime under `target/dist/runtime`. If jdeps cannot inspect the project,
-//! jx builds a full runtime with `ALL-MODULE-PATH` and reports why. The
-//! generated runtime is verified by starting it with `--list-modules`; jx
+//! jx builds a full runtime from every linkable JDK module and reports why.
+//! The generated runtime is verified by starting it with `--list-modules`; jx
 //! never leaves a half-written image behind.
+//!
+//! Recent Temurin JDKs (JEP 493) ship without a `jmods/` directory. `jlink`
+//! still links explicit module lists, but `ALL-MODULE-PATH` and the
+//! `jdk.jlink`/`jdk.jpackage` tool modules cannot be used to build another
+//! image from such a JDK, so full images omit those two modules.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -17,9 +22,10 @@ use jx_common::error::{JxError, Kind};
 pub enum ImageMode {
     /// `jdeps` produced a module set and `jlink` used it.
     Trimmed,
-    /// `--full` asked for every module in the pinned JDK.
+    /// `--full` asked for every linkable module in the pinned JDK.
     Full,
-    /// `jdeps` failed or produced no modules; jx fell back to every module.
+    /// `jdeps` failed or produced no modules; jx fell back to every linkable
+    /// module.
     FullFallback,
 }
 
@@ -46,7 +52,7 @@ pub struct ImageRequest<'a> {
 pub struct ImageOutput {
     pub runtime: PathBuf,
     pub mode: ImageMode,
-    /// Sorted module names requested from jlink; empty for full runtimes.
+    /// Sorted module names requested from jlink.
     pub modules: Vec<String>,
     /// Present only for [`ImageMode::FullFallback`].
     pub fallback_reason: Option<String>,
@@ -75,17 +81,17 @@ pub fn build(request: &ImageRequest<'_>) -> Result<ImageOutput, JxError> {
 
     let mut fallback_reason = None;
     let modules = if request.full {
-        Vec::new()
+        all_linkable_modules(request)?
     } else {
         match trim_modules(request) {
             Ok(modules) if !modules.is_empty() => modules,
             Ok(_) => {
                 fallback_reason = Some("jdeps produced no module list".to_string());
-                Vec::new()
+                all_linkable_modules(request)?
             }
             Err(reason) => {
                 fallback_reason = Some(reason);
-                Vec::new()
+                all_linkable_modules(request)?
             }
         }
     };
@@ -96,11 +102,7 @@ pub fn build(request: &ImageRequest<'_>) -> Result<ImageOutput, JxError> {
     } else {
         ImageMode::Trimmed
     };
-    let added = if mode == ImageMode::Trimmed {
-        modules.join(",")
-    } else {
-        "ALL-MODULE-PATH".to_string()
-    };
+    let added = modules.join(",");
 
     let temp = temp_dir(request.output_dir);
     remove_path(&temp)?;
@@ -141,21 +143,26 @@ fn exe_name(tool: &str) -> String {
 /// Ask jdeps for the module closure. Any failure is a reason to fall back to
 /// a full runtime, not a hard jx failure.
 fn trim_modules(request: &ImageRequest<'_>) -> Result<Vec<String>, String> {
+    let prepared = if request.classpath.is_empty() {
+        None
+    } else {
+        Some(prepare_jdeps_classpath(request)?)
+    };
     let mut command = Command::new(request.jdeps);
     command
         .arg("--print-module-deps")
         .arg("--ignore-missing-deps")
         .arg("--multi-release")
         .arg(request.feature.to_string());
-    if !request.classpath.is_empty() {
-        command.arg("--class-path").arg(request.classpath);
+    if let Some(prepared) = &prepared {
+        command.arg("--class-path").arg(&prepared.joined);
     }
     command.arg(request.classes_dir);
     let output = command
         .output()
         .map_err(|e| format!("cannot run {}: {e}", request.jdeps.display()))?;
     if !output.status.success() {
-        let detail = first_line(&output.stderr);
+        let detail = tool_detail(&output);
         let code = output.status.code().map_or_else(
             || "terminated by signal".to_string(),
             |c| format!("exit code {c}"),
@@ -195,7 +202,7 @@ fn run_jlink(request: &ImageRequest<'_>, output: &Path, added: &str) -> Result<(
     if result.status.success() {
         return Ok(());
     }
-    let detail = first_line(&result.stderr);
+    let detail = tool_detail(&result);
     Err(JxError::new(
         Kind::Build,
         if detail.is_empty() {
@@ -263,6 +270,119 @@ fn verify_runtime(runtime: &Path, modules: &[String]) -> Result<(), JxError> {
     Ok(())
 }
 
+/// jdeps classifies classpath entries by extension. The content cache stores
+/// artifacts by sha256 without one, so jdeps reads a jar as a class file and
+/// fails with "Bad magic number". Give it a scratch directory of `.jar`-named
+/// hard links (copies when a link is not possible), removed on drop.
+fn prepare_jdeps_classpath(request: &ImageRequest<'_>) -> Result<PreparedClasspath, String> {
+    let parent = request
+        .output_dir
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+    let dir = parent.join(format!(".jdeps-{}.tmp", std::process::id()));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| {
+            format!(
+                "cannot clear the previous jdeps scratch directory {}: {e}",
+                dir.display()
+            )
+        })?;
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        format!(
+            "cannot create the jdeps scratch directory {}: {e}",
+            dir.display()
+        )
+    })?;
+    let _scratch = ScratchDir { path: dir.clone() };
+
+    let entries: Vec<PathBuf> = std::env::split_paths(&request.classpath).collect();
+    let mut linked = Vec::with_capacity(entries.len());
+    for (index, entry) in entries.iter().enumerate() {
+        let dest = dir.join(format!("dependency-{index}.jar"));
+        if std::fs::hard_link(entry, &dest).is_err() {
+            std::fs::copy(entry, &dest)
+                .map_err(|e| format!("cannot expose {} to jdeps: {e}", entry.display()))?;
+        }
+        linked.push(dest);
+    }
+    let joined = std::env::join_paths(&linked)
+        .map_err(|e| format!("cannot build the jdeps classpath: {e}"))?
+        .into_string()
+        .map_err(|_| "the dependency classpath is not valid UTF-8".to_string())?;
+    Ok(PreparedClasspath { _scratch, joined })
+}
+
+struct PreparedClasspath {
+    _scratch: ScratchDir,
+    joined: String,
+}
+
+struct ScratchDir {
+    path: PathBuf,
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Every module in the pinned JDK that can be linked without packaged JMODs.
+/// `jdk.jpackage` requires `jdk.jlink`, and JEP 493 JDKs cannot link
+/// `jdk.jlink` into another image.
+fn all_linkable_modules(request: &ImageRequest<'_>) -> Result<Vec<String>, JxError> {
+    let java = request.jlink.with_file_name(exe_name("java"));
+    let output = Command::new(&java)
+        .arg("--list-modules")
+        .output()
+        .map_err(|e| {
+            JxError::new(Kind::Toolchain, "cannot list the pinned JDK's modules")
+                .at(java.display().to_string())
+                .caused_by(e)
+                .hint("install a full JDK 9+; `jx jdk install` fetches one")
+        })?;
+    if !output.status.success() {
+        let detail = tool_detail(&output);
+        return Err(JxError::new(
+            Kind::Toolchain,
+            if detail.is_empty() {
+                "the pinned JDK could not list its modules".to_string()
+            } else {
+                format!("the pinned JDK could not list its modules: {detail}")
+            },
+        )
+        .at(java.display().to_string())
+        .hint("retry with `jx jdk install`; if it persists, the JDK is damaged"));
+    }
+    let available = parse_available_modules(&String::from_utf8_lossy(&output.stdout));
+    let has_jmods = request
+        .jlink
+        .parent()
+        .and_then(Path::parent)
+        .is_some_and(|home| home.join("jmods").is_dir());
+    let modules = linkable_full_modules(available, has_jmods);
+    if modules.is_empty() {
+        return Err(JxError::new(
+            Kind::Toolchain,
+            "the pinned JDK reported no linkable modules",
+        )
+        .at(java.display().to_string())
+        .hint("retry with `jx jdk install`; if it persists, the JDK is damaged"));
+    }
+    Ok(modules)
+}
+
+/// Filter a JDK module list down to the modules `jlink` can use. A JDK with
+/// packaged modules can link all of them; a JMOD-less one (JEP 493) cannot
+/// link its own jlink/jpackage tools.
+fn linkable_full_modules(available: BTreeSet<String>, has_jmods: bool) -> Vec<String> {
+    available
+        .into_iter()
+        .filter(|module| has_jmods || (module != "jdk.jlink" && module != "jdk.jpackage"))
+        .collect()
+}
+
 /// Parse `jdeps --print-module-deps` stdout. Warnings belong on stderr, but
 /// scanning backwards for a valid module list also tolerates a tool that
 /// writes warnings to stdout.
@@ -304,6 +424,17 @@ fn valid_module_name(module: &str) -> bool {
         && module
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+}
+
+/// The useful part of a failed tool's output. Both jlink and some JDK tools
+/// write diagnostics to stdout on Windows, so stderr alone is not enough.
+fn tool_detail(output: &std::process::Output) -> String {
+    let stderr = first_line(&output.stderr);
+    if stderr.is_empty() {
+        first_line(&output.stdout)
+    } else {
+        stderr
+    }
 }
 
 fn first_line(bytes: &[u8]) -> String {
@@ -367,6 +498,49 @@ mod tests {
         assert_eq!(
             parse_module_deps("warning: ignored\njava.base\nwarning after\n"),
             vec!["java.base"]
+        );
+    }
+
+    #[test]
+    fn jdeps_classpath_entries_gain_a_jar_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let dep = dir.path().join("artifact-without-extension");
+        std::fs::write(&dep, b"jar bytes").unwrap();
+        let output_dir = dir.path().join("dist/runtime");
+        std::fs::create_dir_all(output_dir.parent().unwrap()).unwrap();
+        let request = ImageRequest {
+            jdeps: Path::new("jdeps"),
+            jlink: Path::new("jlink"),
+            classes_dir: Path::new("classes"),
+            classpath: &dep.to_string_lossy(),
+            output_dir: &output_dir,
+            feature: 25,
+            full: false,
+        };
+        let prepared = prepare_jdeps_classpath(&request).unwrap();
+        let entries: Vec<PathBuf> = std::env::split_paths(&prepared.joined).collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].extension().unwrap(), "jar");
+        assert_eq!(std::fs::read(&entries[0]).unwrap(), b"jar bytes");
+        let scratch = prepared._scratch.path.clone();
+        assert!(scratch.is_dir());
+        drop(prepared);
+        assert!(!scratch.exists());
+    }
+
+    #[test]
+    fn full_modules_skip_unlinkable_tool_modules() {
+        let available: BTreeSet<String> = ["java.base", "jdk.jlink", "jdk.jpackage", "jdk.zipfs"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            linkable_full_modules(available.clone(), false),
+            vec!["java.base", "jdk.zipfs"]
+        );
+        assert_eq!(
+            linkable_full_modules(available, true),
+            vec!["java.base", "jdk.jlink", "jdk.jpackage", "jdk.zipfs"]
         );
     }
 

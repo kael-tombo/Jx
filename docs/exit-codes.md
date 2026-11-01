@@ -19,7 +19,12 @@ Notes:
 * The global `--locked` flag makes `jx lock`, `jx add`, `jx remove` and the
   build fast path fail with a diagnosed `lock` error when the lockfile is
   missing or would change. That is its contract, not an internal failure;
-  the exit code is still 1 like any other diagnosed error.
+  the exit code is still 1 like any other diagnosed error. It is refused for
+  delegated `build`/`test` because those commands do not read jx.lock.
+* A delegated `build`, `test` or `clean` exits with the build tool's own
+  exit code (`mvn`/`gradle`), which is how a failing external build fails CI.
+  jx's own refusals in delegate mode are usage errors (2) and are rendered
+  with the usual `error:` block.
 * jx's own exit codes 2 and above always accompany a rendered `error:`
   message in the documented format: `error [kind]: message` with `at:` and
   `hint:` lines. `jx test`'s propagated launcher result is test output, not

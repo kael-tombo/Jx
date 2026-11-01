@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Command reference (draft) | jx</title>
-  <meta name="description" content="The planned jx commands for V1 and their intended behaviour. Draft; not released.">
+  <title>Command reference | jx</title>
+  <meta name="description" content="The jx commands in V1 and their behaviour. V1 is implemented; release binaries are pending.">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{TODO: https://domain/docs/commands.html}}">
@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <main id="main" tabindex="-1" data-status="draft">
+  <main id="main" tabindex="-1" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">
     <div class="wrap doc-layout">
       <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Docs">
@@ -51,20 +51,20 @@
 
       <article class="doc-main prose">
         <header class="doc-head">
-          <span class="badge" data-status="draft">Draft</span>
+          <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented</span>
           <h1>Command reference</h1>
-          <p>The planned jx commands for V1 and their intended behaviour. Draft; not released.</p>
+          <p>The jx commands in V1 and their behaviour. V1 is implemented; release binaries are pending.</p>
         </header>
 
-        <p class="note">Every command in this table is part of the V1 plan. None is released. Flags, output formats and exit codes are not fixed.</p>
+        <p class="note">Every command in this table is implemented in the V1 source tree. Flags, output formats and exit codes can still change before the v1.0.0 tag.</p>
 
         <section class="table-wrap" aria-labelledby="commands-caption" tabindex="0">
           <table>
-            <caption id="commands-caption">The full V1 command set. Every row is proposed.</caption>
+            <caption id="commands-caption">The full V1 command set, implemented in the source tree.</caption>
             <thead>
               <tr>
                 <th scope="col">Command</th>
-                <th scope="col">What it would do</th>
+                <th scope="col">What it does</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
@@ -72,98 +72,108 @@
               <tr>
                 <th scope="row"><code>jx new</code></th>
                 <td>Scaffold a project with a manifest and a main class.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx init</code></th>
                 <td>Add a manifest to an existing source tree.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx add</code></th>
                 <td>Add a dependency and resolve it.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx remove</code></th>
                 <td>Remove a dependency and update the lockfile.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx lock</code></th>
                 <td>Resolve dependencies and write exact versions.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx fetch</code></th>
                 <td>Download and verify the artifacts the lockfile pins.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx tree</code></th>
                 <td>Print the resolved dependency graph.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx why</code></th>
                 <td>Explain why an artifact is in the graph.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx build</code></th>
                 <td>Compile main sources and resources.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx run</code></th>
                 <td>Build, then start the main class.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx test</code></th>
                 <td>Compile test sources and run JUnit.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>jx package</code></th>
+                <td>Write a thin jar, a dist tree and, with <code>--fat</code>, a merged jar.</td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>jx image</code></th>
+                <td>Build a runtime image with jdeps and jlink; <code>--full</code> keeps every linkable module.</td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx clean</code></th>
                 <td>Remove build output.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx jdk</code></th>
                 <td>List and install the JDKs jx manages.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx import</code></th>
                 <td>Read a Maven or Gradle project into a manifest.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx export maven</code></th>
                 <td>Write a Maven build from the manifest.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx export gradle</code></th>
                 <td>Write a Gradle build from the manifest.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx doctor</code></th>
                 <td>Check home, cache, network, system Java and disk.</td>
-                <td><span class="badge" data-status="proposed">Planned for V1</span></td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
             </tbody>
           </table>
         </section>
 
         <h2 id="shape">Command shape</h2>
-        <p>The design target is one small command set that covers the common path. The three commands used by the quickstart would be <code>jx new</code>, <code>jx run</code> and <code>jx test</code>.</p>
-        <p>Import and export are the boundary with existing builds. <a href="maven-gradle.html">Maven and Gradle</a> explains the four planned modes. <a href="concepts.html">Concepts</a> explains the manifest and lockfile the commands maintain.</p>
+        <p>One small command set covers the common path. The three commands used by the quickstart are <code>jx new</code>, <code>jx run</code> and <code>jx test</code>.</p>
+        <p>Import and export are the boundary with existing builds. <a href="maven-gradle.html">Maven and Gradle</a> explains the three interop levels. <a href="concepts.html">Concepts</a> explains the manifest and lockfile the commands maintain.</p>
 
-        <h2 id="not-fixed">Not fixed</h2>
-        <p>Subcommands, flags, machine-readable output and exit codes are open questions. They will be documented only when a release exists to describe.</p>
+        <h2 id="not-fixed">Before the tag</h2>
+        <p>The command set is fixed for V1. Flags, machine-readable output and exit codes can still change before v1.0.0 is tagged.</p>
       </article>
     </div>
   </main>
@@ -172,7 +182,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
-        <p>A proposed command-line tool for Java. This is a design preview; nothing is released.</p>
+        <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
         <a href="../vision.html">Vision</a>
@@ -181,7 +191,7 @@
         <a href="../accessibility.html">Accessibility</a>
         <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
-      <p class="footer-legal">Licence: Apache-2.0 OR MIT (proposed). Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
     </div>
   </footer>
 </body>

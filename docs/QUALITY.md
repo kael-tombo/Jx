@@ -2,7 +2,7 @@
 
 Measured 2026-11-01 against the files in this workspace. Every figure below comes
 from a command in the reproduction section; none is estimated. The site is a
-design preview, so the SEO result is deliberately below target until launch.
+V1 preview, so the SEO result is deliberately below target until launch.
 
 ## Acceptance
 
@@ -10,14 +10,14 @@ design preview, so the SEO result is deliberately below target until launch.
 | --- | --- | --- |
 | Ten-second test: what, for whom, status | Pass in the browser suite | Hero title, subhead, badge and status strip asserted by Playwright |
 | Every claim traceable; no banned hype | Pass | `check-claims`: 13 pages, zero banned words, zero unregistered numbers |
-| No release claimed | Pass | Every page `data-status="draft"`; no `implemented` or `shipped` status |
+| No release claimed | Pass | V1 pages use `implemented` with evidence; no page uses `shipped`; the install step says to build from source until a tag exists |
 | Rename in one command, no trace | Pass | Dry run in a throwaway clone: 20 files, 179 occurrences renamed, no old-name match |
-| Lighthouse mobile, all categories 95+ | Performance, accessibility and best practices pass at 100; SEO is 58 | SEO is blocked by intentional `noindex` and placeholder canonicals; see below |
+| Lighthouse mobile, all categories 95+ | Performance, accessibility and best practices 100; SEO is 58 | SEO is blocked by intentional `noindex` and placeholder canonicals; see below |
 | axe: no serious or critical issues | Pass | 26 scans: 13 pages, light and dark |
 | Shared header and footer | Pass | `check-shared`: 13 pages identical after path and current-page normalisation |
 | HTML, links and spelling | Pass | Validator 13 pages; link check 13 pages and 4 stylesheets; cspell 13 files |
 | Production gate | Blocked, as intended | 21 `{{TODO}}` placeholders remain in `public/` |
-| GitHub Pages preview | Deployed and checked | https://kael-tombo.github.io/Jx/ |
+| GitHub Pages preview | Deployed and checked before this redesign | https://kael-tombo.github.io/Jx/ |
 
 ## Performance and size
 
@@ -25,7 +25,7 @@ Lighthouse 12, mobile emulation, single run per URL:
 
 | URL | Performance | Accessibility | Best practices | SEO | FCP | LCP | CLS | TBT |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/` | 100 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0 | 0 ms |
+| `/` | 100 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0.001 | 90 ms |
 | `/vision.html` | 100 | 100 | 100 | 58 | 1.2 s | 1.4 s | 0 | 0 ms |
 | `/docs/commands.html` | 100 | 100 | 100 | 58 | 1.2 s | 1.4 s | 0 | 0 ms |
 
@@ -34,8 +34,8 @@ Lighthouse 12, mobile emulation, single run per URL:
 * Landing JavaScript target: 10 KB gzipped or less. Measured **2,188 bytes**
   (`theme-init` 244, `theme` 576, `terminal` 1,368). All four modules are 2,723
   bytes.
-* Fonts are 41,220 bytes total. The landing page transfers 65 KiB; the docs page
-  59 KiB. No raster images load on any page.
+* Fonts are 41,220 bytes total. The landing page transfers 69 KiB; the docs page
+  61 KiB. No raster images load on any page.
 * No render-blocking font request: fonts are self-hosted, two are preloaded, and
   `font-display: swap` is set.
 
@@ -52,7 +52,8 @@ The GitHub Pages preview is at https://kael-tombo.github.io/Jx/, deployed by
 succeeded on 2026-11-01. A live browser pass loaded all 13 pages with one H1,
 loaded fonts, no console errors and no failed assets; the custom 404 returned
 404 and loaded its stylesheet. The root, CSS, JavaScript and font responses were
-200 with the expected content types.
+200 with the expected content types. The architecture and plan redesign is
+local, including the reuse boundary, and has not been published yet.
 
 GitHub Pages does not apply `_headers`. The live preview therefore has no CSP
 header, no frame denial and no permissions policy. That remains a launch gap;
@@ -96,10 +97,19 @@ or an independent audit by a disabled user. The accessibility page says so.
 * The landing, vision, FAQ, roadmap and glossary separate the workflow layer
   from runtime packaging: jx does not bundle a JRE and does not claim to fix
   the JRE's size; `jlink` is optional deployment packaging.
+* The landing's architecture map covers the command surface, state and local
+  store, six engines, the existing tools and the later plugin host. Each layer
+  says what it does; the tools layer is split into reused now and adapter
+  targets. A reuse rule states the ownership boundary: jx owns the manifest,
+  lockfile and path; the JDK, Maven Central, Maven, Gradle and the platform
+  tools keep their jobs. JBang and Chocolatey are labeled adapter targets, not
+  wired in V1. The plan covers V1, after V1, the boundary and M0–M8; every item
+  is implemented, unscheduled or deliberate.
 * The terminal caption stays visible in every state and says the output is
   illustrative and not a recording.
-* Milestones say "Not released" rather than "Not started"; the reason is ADR
-  0101.
+* Milestones say "Implemented" because the 1.0.0 source tree contains M0–M8;
+  the decision gates stay open or unverified. ADR 0103 supersedes the relevant
+  parts of ADR 0101.
 
 ## Metadata, privacy and security
 
@@ -136,8 +146,8 @@ result. The copy was discarded.
 
 ## Deviations
 
-1. Milestones say "Not released" and the docs command reference says "part of
-   the V1 plan", not "not implemented". ADR 0101.
+1. Milestones and commands say "Implemented"; the decision gates and the
+   pre-tag flag surface remain open. ADR 0103.
 2. Two fonts are preloaded rather than one, because LCP is body text. ADR 0102.
 3. The terminal has Pause and Show all, and reduced motion removes the animation
    entirely. The brief permits a pause control; this is a stricter fallback.
@@ -152,8 +162,9 @@ result. The copy was discarded.
 * GitHub Pages cannot apply `_headers`, so the deployed preview has no CSP
   header, frame denial or permissions policy.
 * SEO is a launch gate, not a pass.
-* The design has been reviewed from screenshots at 375, 768 and 1280 in both
-  themes, but not by an independent designer.
+* The redesigned architecture and plan sections were reviewed from screenshots
+  at 375, 768 and 1280; the 41-test suite covers both axe themes. No independent
+  designer reviewed the result.
 
 ## Sign-off
 

@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: version matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cargo.toml version must equal the tag
+        run: |
+          version=$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -r '.packages[] | select(.name == "jx-cli") | .version')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Cargo.toml says $version but the tag is $GITHUB_REF_NAME" >&2
+            echo "Bump the workspace version or retag before releasing." >&2
+            exit 1
+          fi
+
+  verify:
+    name: fmt / clippy / tests
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: release-verify
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+  build:
+    name: ${{ matrix.target }}
+    needs: [preflight, verify]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - name: Build
+        shell: bash
+        run: cargo build --release --locked --target "$TARGET"
+      - name: Smoke test the binary
+        shell: bash
+        run: |
+          bin="target/$TARGET/release/jx"
+          if [ "$RUNNER_OS" = "Windows" ]; then bin="$bin.exe"; fi
+          "$bin" --version
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/package-release.sh "$TARGET" "$GITHUB_REF_NAME" "target/$TARGET/release/jx"
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "jx-$env:GITHUB_REF_NAME-$env:TARGET"
+          $out = "dist"
+          New-Item -ItemType Directory -Force -Path (Join-Path $out $stage) | Out-Null
+          Copy-Item "target/$env:TARGET/release/jx.exe" (Join-Path $out $stage) -Force
+          Copy-Item README.md, LICENSE-APACHE, LICENSE-MIT, SECURITY.md (Join-Path $out $stage) -Force
+          Compress-Archive -Path (Join-Path $out $stage) -DestinationPath (Join-Path $out "$stage.zip") -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jx-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: checksums, provenance and GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * | LC_ALL=C sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            case "$TAG" in
+              *-*) prerelease=(--prerelease) ;;
+              *) prerelease=() ;;
+            esac
+            gh release create "$TAG" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "jx $TAG" \
+              --generate-notes \
+              --verify-tag \
+              "${prerelease[@]}"
+          fi

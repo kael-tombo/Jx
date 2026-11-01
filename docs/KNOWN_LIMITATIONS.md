@@ -3,23 +3,28 @@
 jx must never claim support for something untested. This file records honest
 gaps, milestone by milestone.
 
-## Current (M7 in progress; annotation processors still deferred from M4)
+## Current (V1 1.0.0; annotation processors still deferred from M4)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
 `jx new`, `jx init`, `jx import` (Maven and Gradle), `jx add`, `jx remove`,
 `jx lock`, `jx fetch`, `jx tree`, `jx why`, `jx build`, `jx test`, `jx run`,
-`jx package`, `jx image`, `jx export maven`, `jx export gradle`, `jx clean`. M2 delivered the
-repository client (fetch with always-on checksum verification, mirrors,
-proxies, auth references, content cache), POM/`maven-metadata.xml` models,
-Maven version ordering and the effective-POM loader. M3 added the resolver,
-the lockfile, the six dependency commands, and the lock fast path that puts
-cached jars on javac's and java's classpath. M4 added fingerprint-skipped
-javac builds, separate main/test dependency classpaths, test compilation and
-JUnit 5 execution. M5 added thin jars, fat jars, the `target/dist` layout and
-Maven POM export. M6 added `jx image`, which builds a jdeps-trimmed jlink
-runtime beside the app and falls back to a full runtime when analysis cannot
-trim. M7 added Maven and Gradle import plus Maven and Gradle export;
-compatibility mode and delegated builds are still ahead.
+`jx package`, `jx image`, `jx export maven`, `jx export gradle`, `jx clean`,
+plus delegated `jx build`/`test`/`clean` through `[build] engine` or the
+global `--engine` flag. M2 delivered the repository client (fetch with
+always-on checksum verification, mirrors, proxies, auth references, content
+cache), POM/`maven-metadata.xml` models, Maven version ordering and the
+effective-POM loader. M3 added the resolver, the lockfile, the six dependency
+commands, and the lock fast path that puts cached jars on javac's and java's
+classpath. M4 added fingerprint-skipped javac builds, separate main/test
+dependency classpaths, test compilation and JUnit 5 execution. M5 added thin
+jars, fat jars, the `target/dist` layout and Maven POM export. M6 added
+`jx image`, which builds a jdeps-trimmed jlink runtime beside the app and
+falls back to a full runtime when analysis cannot trim. M7 added Maven and
+Gradle import, Maven and Gradle export, and delegated builds; compatibility
+mode is the `[build] engine` / `--engine` switch. The post-V1 JBang and
+OS-installer adapters are described in ADR 0013 and are not wired yet. M8
+added the release archives, the checksummed installers, the tag-driven release
+workflow and the [security review](security-checklist.md).
 
 ### Manifest
 
@@ -177,8 +182,14 @@ compatibility mode and delegated builds are still ahead.
   module set incomplete. Use `--full` when the app needs a guaranteed
   runtime.
 - **Fallback is explicit.** When `jdeps` cannot run or produces no module
-  list, jx builds a full `ALL-MODULE-PATH` runtime and reports that mode. The
-  full image is much larger; `--full` skips analysis deliberately.
+  list, jx builds a full runtime from the JDK's own module list and reports
+  that mode. The full image is much larger; `--full` skips analysis
+  deliberately.
+- **A JMOD-less JDK cannot link its jlink/jpackage tools.** Temurin 24+
+  enables JEP 493 and no longer ships `jmods/`. Full and fallback images
+  therefore omit `jdk.jlink` and `jdk.jpackage` (the latter requires the
+  former); the remaining modules link normally. An application that invokes
+  `jlink` or `jpackage` at runtime needs a JDK with packaged modules.
 - **Images are atomic and verified.** `jlink` writes a temporary directory,
   jx starts it with `--list-modules` and checks every requested module, then
   replaces the previous runtime. Before packaging, the whole previous
@@ -232,6 +243,7 @@ compatibility mode and delegated builds are still ahead.
 - **Import validates the generated text with `jx-manifest` before writing.**
   It refuses to replace an existing manifest without `--force`; `--dry-run`
   prints the conversion and notes without touching the filesystem.
+
 ### Gradle import (M7)
 
 - **Only the declarative subset is read.** `jx import app/build.gradle.kts`
@@ -310,14 +322,76 @@ compatibility mode and delegated builds are still ahead.
   scripts never coexist.
 - **CI does not run Gradle.** The generated Kotlin DSL was verified
   manually against Gradle 8.14.3 (`gradle build` and `gradle run`), but the
-  automated suite has no Gradle distribution yet (M8 work).
+  automated suite still has no Gradle distribution.
+
+### Delegated builds (M7)
+
+- **`[build] engine = "maven"` or `"gradle"` delegates `build`, `test` and
+  `clean` only.** Maven receives `compile`, `test`, `clean`; Gradle receives
+  `classes`, `test`, `clean`. `jx run`, `package`, `image` and `export` are
+  refused in this mode because they depend on jx's own classpath, packaging
+  or files; use the build tool, or pass `--engine jx` for one command
+  (ADR 0012).
+- **The external build owns dependency resolution.** `add`, `remove`, `lock`,
+  `fetch`, `tree` and `why` are refused while the engine is delegated, since
+  editing or describing `project.toml` would not affect the build. The error
+  names `--engine jx` and the manifest edit as escapes. Importing a build and
+  then delegating is possible, but the imported dependency table is inactive
+  until the engine is switched back.
+- **Delegation needs `project.toml`.** The manifest supplies the JDK pin; a
+  directory with only `pom.xml` or a Gradle build must be imported first.
+  There is no manifest-less compatibility mode yet.
+- **The tool must exist.** A project wrapper (`mvnw`/`mvnw.cmd`,
+  `gradlew`/`gradlew.bat`) wins over `mvn`/`gradle` on `PATH`; neither being
+  present is a diagnosed error. jx does not bundle Maven or Gradle, and a
+  wrapper's first run may download its distribution even under `--offline`
+  (the flag is forwarded to the tool, not to the wrapper download).
+- **The pinned JDK is exported to the tool**, not just to jx: `JAVA_HOME` is
+  the installed JDK and its `bin/` is first on `PATH`. A missing JDK is
+  installed exactly as for a jx build, unless `--offline` is set.
+- **The tool's exit code is jx's exit code.** Output is inherited, unmodified;
+  jx prints one progress line unless `--quiet`. There is no argument
+  pass-through yet, so build-tool flags and test filters need the tool itself.
+- **`--locked` is refused for delegated `build` and `test`.** It is a
+  jx.lock guarantee, and delegated commands never read jx.lock.
+- **`jx clean` under a manifest cleans that project's `target/`**, even when
+  invoked from a subdirectory; without a manifest it keeps the old behaviour
+  and removes `target/` below the current directory.
+- **Windows wrappers run through `cmd /C`; Unix wrappers need the executable
+  bit.** A non-executable wrapper fails with the wrapper path and a
+  `chmod +x` hint rather than a bare OS error.
+- **CI uses fake wrappers and a fake installed JDK**, so neither Maven nor
+  Gradle is required. Delegated build, test and clean were also run manually
+  against Gradle 8.14.3 with a real JDK 17. Maven was not installed in the
+  development environment, so a real Maven delegation run is still owed.
+
+### Tool composition (after V1)
+
+- **Maven/Gradle delegation is the only external build-tool adapter today.**
+  It is opt-in, diagnosed when the tool is absent, and returns the tool's own
+  exit code (ADR 0012). That shape is the rule for later adapters (ADR 0013).
+- **JBang is not wired.** jx does not run `.java` files, JShell snippets or
+  JBang catalogs, and there is no `jx script` command. Scripts and
+  single-file programs stay with JBang; an optional adapter is post-V1 work,
+  not a claimed feature.
+- **OS installers are neither wrapped nor detected as JDK providers.**
+  Chocolatey, Homebrew, Scoop, SDKMAN and the platform installer remain the
+  owners of OS-level installs. jx installs and lists only its own Temurin
+  store, so a JDK those tools installed is not adopted by `jx build` yet.
+- **No package manager, runtime or build-tool clone.** jx will not grow an OS
+  installer, a bundled JRE, a Maven/Gradle script evaluator or a JBang-style
+  script runner. An adapter is added only when it removes a wheel jx would
+  otherwise reimplement, and it needs an ADR describing ownership, absence
+  diagnostics and fake-tool plus real-tool verification.
 
 ### Toolchain (from M1)
 
 - **The JDK provider is Eclipse Temurin over the Adoptium API only.** Other
-  providers are behind `JdkProvider` but not implemented.
+  providers are behind `JdkProvider` but not implemented, and OS-installed
+  JDKs are not adopted yet (ADR 0013).
 - **JDK archives download with only the API-provided sha256 as
-  verification**; GPG signing is part of the M8 security checklist.
+  verification.** GPG signing is an open owner action in the
+  [security checklist](security-checklist.md); it is not configured.
 - **`--offline` refuses a missing pinned JDK** with a clear error.
 - **`jx run` and `jx test` share the pinned JDK**; locked dependencies now
   reach both classpaths, but `jx lock` does not write the `[jdk]` pin yet —
@@ -334,8 +408,30 @@ compatibility mode and delegated builds are still ahead.
   artifacts via the repository client (M2/M3), the build classpath (M3) and
   dependency copies into `target/dist` (M5).
 
+### Release and platform support
+
+- **The release workflow publishes five native targets** when a `v*` tag
+  matches the workspace version: Linux x64/arm64, macOS x64/arm64 and Windows
+  x64, with `SHA256SUMS` and a GitHub build provenance attestation. The
+  installers verify the checksum before installing.
+- **Linux binaries are glibc builds, not static.** x64 builds on Ubuntu 22.04
+  (glibc 2.35); arm64 builds on Ubuntu 24.04 (glibc 2.39) and will not run on
+  an older arm64 distribution until a static build exists.
+- **No maintainer signature and no OS code signing.** Release archives are not
+  GPG/minisign-signed, and the macOS and Windows binaries are not notarized or
+  code-signed. Gatekeeper and SmartScreen warnings are expected. Checksums and
+  attestations are the available signals.
+- **No reproducible-build check.** The workflow does not set
+  `SOURCE_DATE_EPOCH` or compare an independent rebuild.
+- **Fuzzing is not part of CI.** Archive extraction, POM parsing and the Gradle
+  declaration parser have targeted tests, not a fuzz campaign.
+- **The release approver and independent security reviewer are owner actions**;
+  see the sign-off table in the [security checklist](security-checklist.md).
+
 ### CI / release
 
 - **CI runs fmt/clippy/tests on Linux, macOS and Windows, plus cargo-deny**,
-  but milestone end-to-end scenarios are not exercised in CI yet (M8).
-- **No release binaries, no install script** (M8).
+  but milestone end-to-end scenarios are not exercised in CI yet.
+- **The tag workflow is the only release path.** A local `cargo build
+  --release` produces a working binary, but no archive, checksum or
+  attestation until the tag workflow runs.

@@ -3,15 +3,15 @@
 //! Entrypoint discovery lives in `jx-run`, compilation and fingerprints in
 //! `jx-build`, jar and dist assembly in `jx-package`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use jx_common::error::{JxError, Kind};
-use jx_manifest as manifest;
+use jx_manifest::{self as manifest, BuildEngine};
 use jx_toolchain as toolchain;
 
 use crate::deps::{self, Classpaths};
-use crate::{Cli, locate_manifest};
+use crate::{Cli, engine, locate_manifest};
 
 struct Loaded {
     manifest_dir: PathBuf,
@@ -133,14 +133,58 @@ fn junit_missing() -> JxError {
     .hint(r#"run `jx add --dev org.junit.platform:junit-platform-console-standalone`; it bundles the Jupiter engine"#)
 }
 
+/// After the build file and tool are found but before the JDK is installed,
+/// so a misconfigured delegate never downloads anything. Returns `None` when
+/// jx owns the build.
+fn delegated(
+    cli: &Cli,
+    loaded: &Loaded,
+    goal: jx_interop::delegate::Goal,
+) -> Result<Option<ExitCode>, JxError> {
+    use jx_interop::delegate::{self, Engine, Goal};
+
+    let external = match engine::selected(cli, &loaded.manifest) {
+        BuildEngine::Jx => return Ok(None),
+        BuildEngine::Maven => Engine::Maven,
+        BuildEngine::Gradle => Engine::Gradle,
+    };
+    if cli.locked && matches!(goal, Goal::Build | Goal::Test) {
+        return Err(JxError::new(
+            Kind::Lock,
+            "--locked is a jx.lock guarantee, but this project delegates its build",
+        )
+        .hint("drop --locked, or pass `--engine jx` to build from project.toml and jx.lock"));
+    }
+    let plan = delegate::plan(&delegate::Request {
+        project_dir: &loaded.manifest_dir,
+        engine: external,
+        goal,
+        offline: cli.offline,
+    })?;
+    let jdk = ensure_jdk(cli, loaded.manifest.jdk_feature()?)?;
+    if !cli.quiet {
+        println!(
+            "delegating to {}: {}",
+            external.label(),
+            plan.command_line()
+        );
+        println!("  Java: {}", jdk.dir.display());
+    }
+    let code = delegate::execute(&plan, &jdk.dir)?;
+    Ok(Some(ExitCode::from(code as u8)))
+}
+
 /// `jx build`
-pub fn build(cli: &Cli) -> Result<(), JxError> {
+pub fn build(cli: &Cli) -> Result<ExitCode, JxError> {
     let loaded = load(cli)?;
+    if let Some(code) = delegated(cli, &loaded, jx_interop::delegate::Goal::Build)? {
+        return Ok(code);
+    }
     let deps = deps::classpaths(cli)?;
     let feature = loaded.manifest.jdk_feature()?;
     let jdk = ensure_jdk(cli, feature)?;
     compile_main(&loaded, &jdk, &deps)?;
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 /// `jx test`: compile main and tests, then scan the test classpath with the
@@ -148,6 +192,9 @@ pub fn build(cli: &Cli) -> Result<(), JxError> {
 /// a failing test suite fails CI without a second wrapper.
 pub fn test(cli: &Cli) -> Result<ExitCode, JxError> {
     let loaded = load(cli)?;
+    if let Some(code) = delegated(cli, &loaded, jx_interop::delegate::Goal::Test)? {
+        return Ok(code);
+    }
     let deps = deps::classpaths(cli)?;
     let feature = loaded.manifest.jdk_feature()?;
     let jdk = ensure_jdk(cli, feature)?;
@@ -158,9 +205,19 @@ pub fn test(cli: &Cli) -> Result<ExitCode, JxError> {
     let mut classpath = vec![test_classes.display().to_string()];
     classpath.push(main_classes.display().to_string());
     classpath.extend(deps.test.iter().map(|path| path.display().to_string()));
-    let status = Command::new(jdk.java())
-        .arg("-jar")
-        .arg(&launcher)
+    let mut command = Command::new(jdk.java());
+    command.arg("-jar").arg(&launcher);
+    // JUnit Platform 1.10 introduced the `execute` command and 1.14 deprecates
+    // the implicit delegation. Older launchers only accept the flat form, so
+    // choose from the locked launcher version rather than probing with a JVM.
+    if deps
+        .junit_launcher_version
+        .as_deref()
+        .is_some_and(junit_supports_execute)
+    {
+        command.arg("execute");
+    }
+    let status = command
         .arg("--class-path")
         .arg(classpath.join(jx_run::classpath_separator()))
         .arg("--scan-class-path")
@@ -198,6 +255,13 @@ fn package_main(
 /// single fat jar with the locked main dependencies merged in.
 pub fn package(cli: &Cli, fat: bool) -> Result<(), JxError> {
     let loaded = load(cli)?;
+    engine::require_jx(
+        cli,
+        &loaded.manifest,
+        "jx package",
+        "the delegated build owns compilation and packaging",
+    )?;
+
     let deps = deps::classpaths(cli)?;
     let feature = loaded.manifest.jdk_feature()?;
     let jdk = ensure_jdk(cli, feature)?;
@@ -309,6 +373,12 @@ pub fn package(cli: &Cli, fat: bool) -> Result<(), JxError> {
 /// working app/runtime pair.
 pub fn image(cli: &Cli, full: bool) -> Result<(), JxError> {
     let loaded = load(cli)?;
+    engine::require_jx(
+        cli,
+        &loaded.manifest,
+        "jx image",
+        "the delegated build owns compilation and packaging",
+    )?;
     let dist = target_dir(&loaded).join("dist");
     let backup = target_dir(&loaded).join(format!(".jx-dist-backup-{}", std::process::id()));
     if backup.exists() {
@@ -408,7 +478,9 @@ fn image_into(cli: &Cli, full: bool) -> Result<(), JxError> {
         jx_package::image::ImageMode::Trimmed => {
             format!("trimmed runtime: {}", output.modules.join(", "))
         }
-        jx_package::image::ImageMode::Full => "full runtime, all modules".to_string(),
+        jx_package::image::ImageMode::Full => {
+            format!("full runtime, {} linkable modules", output.modules.len())
+        }
         jx_package::image::ImageMode::FullFallback => format!(
             "full runtime; jdeps could not trim: {}",
             output
@@ -506,6 +578,12 @@ fn gradle_dependencies(
 /// then write a POM that mirrors project.toml and the locked versions.
 pub fn export_maven(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxError> {
     let loaded = load(cli)?;
+    engine::require_jx(
+        cli,
+        &loaded.manifest,
+        "jx export maven",
+        "jx would write a second build next to the Maven build this project delegates to",
+    )?;
     let path = loaded.manifest_dir.join("pom.xml");
     if path.exists() && !force {
         return Err(JxError::new(Kind::Io, "pom.xml already exists")
@@ -570,6 +648,12 @@ pub fn export_maven(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxErro
 /// and the locked versions.
 pub fn export_gradle(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxError> {
     let loaded = load(cli)?;
+    engine::require_jx(
+        cli,
+        &loaded.manifest,
+        "jx export gradle",
+        "jx would write a second build next to the Gradle build this project delegates to",
+    )?;
     let build_path = loaded.manifest_dir.join("build.gradle.kts");
     let settings_path = loaded.manifest_dir.join("settings.gradle.kts");
     let groovy_path = loaded.manifest_dir.join("build.gradle");
@@ -666,6 +750,12 @@ fn write_export(path: &std::path::Path, text: &str) -> Result<(), JxError> {
 /// `jx run [-- args]`, with optional `--debug [--port N]`.
 pub fn run(cli: &Cli, debug_port: Option<u16>, argv: Vec<String>) -> Result<ExitCode, JxError> {
     let loaded = load(cli)?;
+    engine::require_jx(
+        cli,
+        &loaded.manifest,
+        "jx run",
+        "the delegated build owns compilation and the runtime classpath",
+    )?;
     let deps = deps::classpaths(cli)?;
     let feature = loaded.manifest.jdk_feature()?;
     let jdk = ensure_jdk(cli, feature)?;
@@ -686,4 +776,83 @@ pub fn run(cli: &Cli, debug_port: Option<u16>, argv: Vec<String>) -> Result<Exit
     };
     let code = jx_run::Runner::run(&runner, &spec)?;
     Ok(ExitCode::from(code as u8))
+}
+
+/// `jx clean`: remove `<project>/target`, or ask a delegated engine to clean
+/// its own output. A directory with no manifest keeps the old behaviour and
+/// removes `target/` below the current directory.
+pub fn clean(cli: &Cli) -> Result<ExitCode, JxError> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| JxError::new(Kind::Io, "cannot read the current directory").caused_by(e))?;
+    let manifest_path = match locate_manifest(cli) {
+        Ok(path) => path,
+        Err(error) => {
+            if cli.manifest_path.is_some() {
+                return Err(error);
+            }
+            if cli
+                .engine
+                .is_some_and(|engine| BuildEngine::from(engine).is_delegated())
+            {
+                return Err(JxError::new(
+                    Kind::Manifest,
+                    "engine delegation needs a project.toml for the JDK pin",
+                )
+                .hint("run `jx import` here first, then `jx clean`"));
+            }
+            remove_target(&cwd.join("target"))?;
+            return Ok(ExitCode::SUCCESS);
+        }
+    };
+    let loaded = Loaded {
+        manifest_dir: manifest_path
+            .parent()
+            .expect("manifest path always has a parent")
+            .to_path_buf(),
+        manifest: manifest::parse(&manifest_path)?,
+    };
+    if let Some(code) = delegated(cli, &loaded, jx_interop::delegate::Goal::Clean)? {
+        return Ok(code);
+    }
+    remove_target(&loaded.manifest_dir.join("target"))?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn remove_target(target: &Path) -> Result<(), JxError> {
+    if target.is_dir() {
+        std::fs::remove_dir_all(target).map_err(|e| {
+            JxError::new(Kind::Io, "cannot remove target/")
+                .at(target.display().to_string())
+                .caused_by(e)
+        })?;
+    }
+    Ok(())
+}
+
+/// Whether this console-launcher version accepts the `execute` subcommand,
+/// introduced in JUnit Platform 1.10.
+fn junit_supports_execute(version: &str) -> bool {
+    let Ok(version) = jx_maven::ComparableVersion::parse(version) else {
+        return false;
+    };
+    let Ok(minimum) = jx_maven::ComparableVersion::parse("1.10.0") else {
+        return false;
+    };
+    version.compare(&minimum) != std::cmp::Ordering::Less
+}
+
+#[cfg(test)]
+mod tests {
+    use super::junit_supports_execute;
+
+    #[test]
+    fn junit_execute_is_used_only_from_platform_1_10() {
+        assert!(!junit_supports_execute("1.8.2"));
+        assert!(!junit_supports_execute("1.9.3"));
+        assert!(junit_supports_execute("1.10.0"));
+        assert!(junit_supports_execute("1.10.5"));
+        assert!(junit_supports_execute("1.14.4"));
+        assert!(junit_supports_execute("2.0.0"));
+        assert!(!junit_supports_execute("not-a-version"));
+    }
 }

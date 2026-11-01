@@ -25,14 +25,21 @@ always full is safe but gives up the point of the milestone.
   accepts syntactically conservative module names. `--ignore-missing-deps`
   keeps optional annotation classes from blocking analysis; it also means a
   genuinely missing dependency can yield an incomplete module set, which is
-  why the full fallback exists.
+  why the full fallback exists. The content cache names artifacts by sha256
+  without an extension, and jdeps classifies classpath entries by extension;
+  jx therefore gives jdeps a scratch directory of `.jar`-named hard links
+  (copied when a link is not possible), removed after analysis.
 * **Linking:** `jlink --add-modules <modules> --strip-debug --no-header-files
   --no-man-pages`. No compression flag is passed: its spelling changed across
   JDK releases, and a portable command matters more than a few image bytes.
 * **Fallback:** if jdeps cannot run, exits non-zero, or produces no module
-  list, jx builds a full runtime with `ALL-MODULE-PATH` and prints the reason.
-  `jx image --full` skips analysis deliberately. A full image is large but
-  still a valid, self-contained runtime.
+  list, jx builds a full runtime from `java --list-modules` and prints the
+  reason. `jx image --full` skips analysis deliberately. A full image is
+  large but still a valid, self-contained runtime. Because Temurin 24+
+  enables JEP 493 and omits `jmods/`, the full list excludes `jdk.jlink` and
+  `jdk.jpackage`: a JMOD-less JDK cannot link `jdk.jlink` into another image,
+  and `jdk.jpackage` requires it. Every other module is included and
+  verified.
 * **Atomic replacement:** `jlink` writes a process-unique temporary directory
   beside the target. jx starts that runtime with `--list-modules`, checks that
   every requested module is present, and only then replaces the previous

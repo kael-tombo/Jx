@@ -112,5 +112,5 @@ project layout.
   not reproduced.
 * Multi-module repositories should import each application module separately
   until jx has a workspace model.
-* Gradle import was added in ADR 0011; Maven/Gradle compatibility mode and
-  delegated builds remain M7 work.
+* Gradle import was added in ADR 0011, and delegated Maven/Gradle lifecycle
+  commands in ADR 0012; M7 is complete.

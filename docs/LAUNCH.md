@@ -1,7 +1,7 @@
 # Launch gates
 
-The public folder is a **design preview**, not a release. Production is blocked
-until every item below is closed. `node scripts/check-todos.mjs --production`
+The public folder is a **V1 preview**, not a tagged release. Production is
+blocked until every item below is closed. `node scripts/check-todos.mjs --production`
 returns non-zero while any `{{TODO}}` remains. The 21 current placeholders are
 grouped under the gates below; `node scripts/check-todos.mjs` prints the exact
 file and line for each.
@@ -25,9 +25,9 @@ file and line for each.
 | 1 | Project name and final domain | `site.config.json`, every canonical URL, OG metadata | Open: `{{TODO: final domain}}` |
 | 2 | Name collision review for `jx` (Jenkins X and any other CLI) | Search results, GitHub organisation, package names | Open. The name is a placeholder. |
 | 3 | Public repository | Footer GitHub link and JSON-LD `codeRepository` | URL is set from the `origin` remote. Open: confirm the repository is public before launch. |
-| 4 | Final licence | Footer, JSON-LD `license` | Open: Apache-2.0 OR MIT is proposed |
+| 4 | Final licence | Footer, JSON-LD `license` | Closed: the repository and both licence files state Apache-2.0 OR MIT; the footer matches. |
 | 5 | Owner and governance | FAQ, contributing docs | Open: `{{TODO: owner and governance}}` |
-| 6 | Public milestone visibility | Roadmap and landing roadmap strip | Open. Currently "Not released" for every milestone; no progress is published. |
+| 6 | Public milestone visibility | Roadmap and landing roadmap strip | Closed for implementation status: V1 and M0–M8 are marked implemented; gates remain open. ADR 0103. |
 | 7 | Signup endpoint and wording | Landing follow section | Open: `{{TODO: signup endpoint}}`. Add the form only when the endpoint exists. |
 | 8 | Analytics decision | Privacy page, CSP | Open: `{{TODO: analytics decision}}`. Default is none. |
 | 9 | Hosting choice | `public/_headers` | Chosen: GitHub Pages. `_headers` is not applied there, so the live preview has no CSP header. Use a host that supports `_headers` if the strict header is required. |

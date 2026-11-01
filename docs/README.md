@@ -3,8 +3,9 @@
 `jx` is a single-binary command line tool that makes developing Java feel like
 `cargo` (Rust) or `uv` (Python): one tool, one manifest (`project.toml`), one
 lockfile (`jx.lock`). It manages JDKs, resolves dependencies from Maven
-Central, and builds, tests, runs and packages a project — while always
-offering the exit back to Maven or Gradle.
+Central, and builds, tests, runs and packages a project — while sitting on
+top of the tools that already own each job and always offering the exit back
+to Maven or Gradle.
 
 ## Where things live
 
@@ -13,6 +14,9 @@ offering the exit back to Maven or Gradle.
 | [decisions/](decisions/) | ADRs (MADR). Template: [decisions/TEMPLATE.md](decisions/TEMPLATE.md) |
 | [exit-codes.md](exit-codes.md) | The stable exit-code contract |
 | [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | What jx honestly does not do yet |
+| [security-checklist.md](security-checklist.md) | V1 security review, fixes and open owner actions |
+| [RELEASING.md](RELEASING.md) | Version, tag, release verification and rollback |
+| [quickstart.md](quickstart.md) | Install, verify and run the first project |
 | [QUALITY.md](QUALITY.md) | Measured website quality record |
 | [LAUNCH.md](LAUNCH.md) | Website launch gates and owner inputs |
 | [AGENT_STATE.md](AGENT_STATE.md) | Current site work, decisions and next step |
@@ -35,10 +39,16 @@ jdeps/jlink image and its full-runtime fallback;
 not;
 [decisions/0011-gradle-interop.md](decisions/0011-gradle-interop.md) — the
 Gradle declaration subset, the Spring Boot BOM rule and the generated
-Kotlin-DSL build. Still planned for later milestones:
-
-* `docs/quickstart.md` — the executed-in-CI quickstart
-* `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
+Kotlin-DSL build;
+[decisions/0012-delegated-builds.md](decisions/0012-delegated-builds.md) —
+`[build] engine` and `--engine`: what a delegated Maven/Gradle build owns,
+which commands are refused, and why;
+[decisions/0013-compose-the-ecosystem.md](decisions/0013-compose-the-ecosystem.md)
+— the ownership table and adapter rules that keep jx a workflow layer rather
+than a package manager, runtime or build tool. [quickstart.md](quickstart.md)
+is the executable user path; [security-checklist.md](security-checklist.md)
+records the extraction, checksum, TLS and injection review;
+[RELEASING.md](RELEASING.md) is the version/tag/verification procedure.
 
 Build/test (M4), packaging (M5) and runtime-image (M6) behaviour is described
 in the README quickstart and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md); no
@@ -59,9 +69,9 @@ jx/
     jx-build/       # javac, fingerprints, test running
     jx-package/     # jar, dist layout, jdeps/jlink and Maven export
     jx-run/         # Runner trait, plain-main runner
-    jx-interop/     # Maven and Gradle import; compatibility, delegation ahead
+    jx-interop/     # Maven and Gradle import and delegated builds
     jx-testsupport/ # fake repository server, fixtures, differential harness
-  docs/  corpus/  xtask/
+  docs/  public/  scripts/  tests/
 ```
 
 Crates marked "placeholder" in their doc comment are reserved for upcoming
@@ -78,8 +88,11 @@ milestones; nothing in this repository claims to support them yet.
 | M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **done** — POM export is an approximation (ADR 0007) |
 | M6 | Runtime trimming: jdeps + jlink with fallback | **done** — `jx image`, verified and atomic; reflection risk documented |
-| M7 | Maven and Gradle interop: import, compatibility, delegate, exports | **in progress** — `jx import` (Maven + Gradle) and `jx export maven/gradle`, ADRs 0010–0011; compatibility and delegation ahead |
-| M8 | Release hardening: docs, install script, security checklist | not started |
+| M7 | Maven and Gradle interop: import, compatibility, delegate, exports | **done** — `jx import` (Maven + Gradle), `jx export maven/gradle` and delegated `build`/`test`/`clean` via `[build] engine` or `--engine`; ADRs 0010–0012 |
+| M8 | Release hardening: docs, install script, security checklist | **done** — release workflow, checksummed installers, security review; owner sign-off and signing remain |
+
+After V1, optional adapters may hand scripts to JBang and OS installs to
+Chocolatey, Homebrew or Scoop; both are deliberately absent today (ADR 0013).
 
 Items requiring verification against live documentation before implementation
 are collected in the brief (section 15); the relevant ADR records the verified

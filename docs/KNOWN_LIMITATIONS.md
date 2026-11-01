@@ -6,9 +6,9 @@ gaps, milestone by milestone.
 ## Current (M7 in progress; annotation processors still deferred from M4)
 
 Live commands: `jx --version`, `jx doctor`, `jx jdk install/list/use/remove`,
-`jx new`, `jx init`, `jx import` (Maven), `jx add`, `jx remove`, `jx lock`,
-`jx fetch`, `jx tree`, `jx why`, `jx build`, `jx test`, `jx run`, `jx package`,
-`jx image`, `jx export maven`, `jx clean`. M2 delivered the
+`jx new`, `jx init`, `jx import` (Maven and Gradle), `jx add`, `jx remove`,
+`jx lock`, `jx fetch`, `jx tree`, `jx why`, `jx build`, `jx test`, `jx run`,
+`jx package`, `jx image`, `jx export maven`, `jx export gradle`, `jx clean`. M2 delivered the
 repository client (fetch with always-on checksum verification, mirrors,
 proxies, auth references, content cache), POM/`maven-metadata.xml` models,
 Maven version ordering and the effective-POM loader. M3 added the resolver,
@@ -18,8 +18,8 @@ javac builds, separate main/test dependency classpaths, test compilation and
 JUnit 5 execution. M5 added thin jars, fat jars, the `target/dist` layout and
 Maven POM export. M6 added `jx image`, which builds a jdeps-trimmed jlink
 runtime beside the app and falls back to a full runtime when analysis cannot
-trim. M7 has started with Maven import; Gradle import/export, compatibility
-mode and delegated builds are still ahead.
+trim. M7 added Maven and Gradle import plus Maven and Gradle export;
+compatibility mode and delegated builds are still ahead.
 
 ### Manifest
 
@@ -56,7 +56,9 @@ mode and delegated builds are still ahead.
   code receives only main artifacts, tests receive main plus
   `[dev-dependencies]`. There is no separate runtime versus compile scope
   yet — Maven's `provided`/`runtime` scopes are not represented in the
-  manifest.
+  manifest. `test` and `provided` dependencies of a dependency are not
+  transitive (Maven's rule), so build-only tools no longer leak into every
+  consumer's graph.
 - **Artifacts are assumed to be jars.** POM dependencies with a non-jar
   `type` (AAR, test-jar, …) are fetched at the `.jar` path today; the
   manifest grammar has no `type` field in V1.
@@ -78,7 +80,9 @@ mode and delegated builds are still ahead.
   M3 end-to-end tests; live Maven Central is not part of CI.
 - **Effective-POM support is reached by the CLI through the resolver**:
   parent-chain fetching, inheritance merging, `${...}` interpolation and BOM
-  (`scope=import`) consolidation live in `jx_maven::PomLoader`. POM
+  (`scope=import`) consolidation live in `jx_maven::PomLoader`. Dependency
+  group/artifact ids, exclusions and `${project.<property>}` spellings are
+  interpolated too; before M7 only versions and classifiers were. POM
   `<repositories>` are parsed and merged but nothing fetches from them yet.
 - **Snapshot resolution is releases-only offline**: `--offline` refuses
   snapshots, and the lockfile does not record a timestamped snapshot form
@@ -228,8 +232,41 @@ mode and delegated builds are still ahead.
 - **Import validates the generated text with `jx-manifest` before writing.**
   It refuses to replace an existing manifest without `--force`; `--dry-run`
   prints the conversion and notes without touching the filesystem.
-- **Gradle import is not implemented yet.** `jx import` currently names a POM
-  (or a directory containing one) and only understands Maven.
+### Gradle import (M7)
+
+- **Only the declarative subset is read.** `jx import app/build.gradle.kts`
+  (or `build.gradle`, or a directory containing one) understands dependency
+  declarations in string and Groovy map form, `platform(...)` imports,
+  `constraints`, literal `ext`/`def`/`val` variables, the Java toolchain and
+  the application main class. Gradle is never executed.
+- **Anything that needs evaluation is refused**, with a file and line:
+  unresolved interpolation, version catalogs (`libs.*`), `project(...)`,
+  `files(...)`, `fileTree(...)`, dynamic versions/ranges, SNAPSHOTs, and
+  dependency declarations inside `if`/`for`/`while` or `allprojects`/
+  `subprojects` blocks. A dropped dependency would build differently, so the
+  import stops instead of guessing.
+- **Versionless dependencies need a platform BOM.** When the build applies
+  the Spring Boot plugin at a literal version, the import adds
+  `org.springframework.boot:spring-boot-dependencies` at that version as a
+  platform, because that is the BOM the plugin applies; the note says so and
+  `jx lock` verifies it. Other plugin-managed versions cannot be known
+  statically and must be given an explicit version or platform.
+- **Plugins are never migrated.** Their count is noted; a Spring Boot or
+  Quarkus plugin also gets a note that executable-jar repackaging is not
+  reproduced. Repositories, the `buildscript` classpath, custom
+  configurations and dependency configuration blocks (excludes, transitive
+  flags) are not imported; each is noted.
+- **Scopes are widened.** `runtimeOnly` and `compileOnly` become
+  `[dependencies]`, test-only configurations become `[dev-dependencies]`,
+  and annotation processors are skipped (jx does not run them yet).
+- **Constraints become `[overrides]`.** Gradle constraints are
+  per-configuration; jx overrides apply to the whole graph. The note says
+  so.
+- **Both build files in one directory prefer Maven.** The import prints that
+  choice; pass the Gradle script explicitly to convert Gradle. Multi-module
+  settings are noted, and only the named module is imported.
+- **Test dependencies are imported, but `jx test` still needs the JUnit
+  Platform console standalone** in `[dev-dependencies]`.
 
 ### Maven export (M5)
 
@@ -249,7 +286,31 @@ mode and delegated builds are still ahead.
   main class can be written into the jar plugin.
 - **An existing `pom.xml` is never overwritten without `--force`.**
 - **The default Maven groupId is `local.jx`**; pass `--group-id` for a real
-  coordinate. Gradle export is still planned for M7.
+  coordinate.
+
+### Gradle export (M7)
+
+- **`jx export gradle` writes Kotlin DSL only**: `build.gradle.kts` plus
+  `settings.gradle.kts`. A library gets `java-library`; an application gets
+  `application` and its main class.
+- **It compiles once**, like the Maven exporter, so a discovered main class
+  is written. This needs the pinned JDK.
+- **Dependencies use the concrete versions from `jx.lock`**: main entries as
+  `implementation`, dev entries as `testImplementation`, classifiers
+  preserved, and `[overrides]` as dependency `constraints`. Platform BOMs
+  are not re-exported; their effect is already in the concrete versions.
+- **Only `mavenCentral()` is written.** Repositories, mirrors and auth in
+  `config.toml` are machine configuration and are not copied into a project
+  file; add private repositories to the generated build by hand.
+- **No plugin configuration, annotation processors or runtime images are
+  exported.** The file is a working starting point, not a reproduction of
+  jx's build.
+- **An existing `build.gradle.kts` or `settings.gradle.kts` is only replaced
+  with `--force`.** A Groovy `build.gradle` is refused outright so two build
+  scripts never coexist.
+- **CI does not run Gradle.** The generated Kotlin DSL was verified
+  manually against Gradle 8.14.3 (`gradle build` and `gradle run`), but the
+  automated suite has no Gradle distribution yet (M8 work).
 
 ### Toolchain (from M1)
 

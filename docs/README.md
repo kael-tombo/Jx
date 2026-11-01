@@ -32,7 +32,10 @@ generated POM does and does not reproduce;
 jdeps/jlink image and its full-runtime fallback;
 [decisions/0010-maven-import.md](decisions/0010-maven-import.md) — what
 `jx import` converts from an effective POM and what it deliberately does
-not. Still planned for later milestones:
+not;
+[decisions/0011-gradle-interop.md](decisions/0011-gradle-interop.md) — the
+Gradle declaration subset, the Spring Boot BOM rule and the generated
+Kotlin-DSL build. Still planned for later milestones:
 
 * `docs/quickstart.md` — the executed-in-CI quickstart
 * `docs/security-checklist.md` — extraction, checksum, TLS, injection review (M8)
@@ -56,7 +59,7 @@ jx/
     jx-build/       # javac, fingerprints, test running
     jx-package/     # jar, dist layout, jdeps/jlink and Maven export
     jx-run/         # Runner trait, plain-main runner
-    jx-interop/     # Maven import; Gradle import, compatibility, delegation ahead
+    jx-interop/     # Maven and Gradle import; compatibility, delegation ahead
     jx-testsupport/ # fake repository server, fixtures, differential harness
   docs/  corpus/  xtask/
 ```
@@ -75,7 +78,7 @@ milestones; nothing in this repository claims to support them yet.
 | M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **done** — POM export is an approximation (ADR 0007) |
 | M6 | Runtime trimming: jdeps + jlink with fallback | **done** — `jx image`, verified and atomic; reflection risk documented |
-| M7 | Maven and Gradle interop: import, compatibility, delegate, exports | **in progress** — `jx import` (Maven), ADR 0010; Gradle and delegation ahead |
+| M7 | Maven and Gradle interop: import, compatibility, delegate, exports | **in progress** — `jx import` (Maven + Gradle) and `jx export maven/gradle`, ADRs 0010–0011; compatibility and delegation ahead |
 | M8 | Release hardening: docs, install script, security checklist | not started |
 
 Items requiring verification against live documentation before implementation

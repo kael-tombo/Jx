@@ -43,8 +43,8 @@ impl From<ColorArg> for When {
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
 small manifest.\n\nStatus: M7 (interop). Live: jx jdk <command>, jx new/init, \
 jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package/image, \
-jx import, jx export maven and jx doctor. Gradle import/export, compatibility \
-mode and delegated builds are still ahead."
+jx import (Maven or Gradle), jx export maven/gradle and jx doctor. \
+Compatibility mode and delegated builds are still ahead."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -79,9 +79,10 @@ enum Command {
     },
     /// Initialise jx in an existing directory
     Init,
-    /// Convert an existing Maven POM into project.toml (Gradle planned)
+    /// Convert an existing Maven POM or Gradle build into project.toml
     Import {
-        /// Path to pom.xml, or to a directory containing one (default: ./pom.xml)
+        /// Path to pom.xml, build.gradle(.kts), or a directory containing one
+        /// (default: the current directory)
         path: Option<PathBuf>,
         /// Write the manifest here instead of ./project.toml
         #[arg(long, value_name = "PATH")]
@@ -156,7 +157,7 @@ enum Command {
     /// Manage JDK installations under ~/.jx/jdks
     #[command(subcommand)]
     Jdk(JdkCommand),
-    /// Write an equivalent Maven or Gradle build (Maven now; Gradle M7)
+    /// Write an equivalent Maven or Gradle build
     #[command(subcommand)]
     Export(ExportCommand),
     /// Check jx's environment: home, cache, network, Java, disk
@@ -189,8 +190,15 @@ enum ExportCommand {
         #[arg(long)]
         force: bool,
     },
-    /// Write build.gradle.kts and settings.gradle.kts (planned M7)
-    Gradle,
+    /// Write build.gradle.kts and settings.gradle.kts from project.toml and jx.lock
+    Gradle {
+        /// Gradle `group` for the generated build
+        #[arg(long, default_value = "local.jx", value_name = "NAME")]
+        group_id: String,
+        /// Overwrite an existing build.gradle.kts or settings.gradle.kts
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -229,7 +237,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
             output,
             force,
             dry_run,
-        } => import::maven(cli, path.clone(), output.clone(), *force, *dry_run)
+        } => import::run(cli, path.clone(), output.clone(), *force, *dry_run)
             .map(|()| ExitCode::SUCCESS),
         Command::Add {
             dependency,
@@ -250,11 +258,9 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Export(ExportCommand::Maven { group_id, force }) => {
             build::export_maven(cli, group_id, *force).map(|()| ExitCode::SUCCESS)
         }
-        Command::Export(ExportCommand::Gradle) => Err(unimplemented(
-            "export gradle",
-            "M7",
-            "hand-write the Gradle build meanwhile",
-        )),
+        Command::Export(ExportCommand::Gradle { group_id, force }) => {
+            build::export_gradle(cli, group_id, *force).map(|()| ExitCode::SUCCESS)
+        }
     }
 }
 
@@ -350,28 +356,9 @@ fn clean_project() -> Result<ExitCode, JxError> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn unimplemented(cmd: &str, milestone: &str, interim: &str) -> JxError {
-    JxError::new(
-        Kind::Usage,
-        format!("`jx {cmd}` is not implemented yet (planned for milestone {milestone})"),
-    )
-    .hint(format!("{interim}; see docs/README.md for the roadmap"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn unimplemented_errors_carry_milestones() {
-        let e = unimplemented("new", "M1", "hint");
-        assert!(format!("{e}").contains("milestone M1"));
-        assert!(
-            e.hint
-                .as_deref()
-                .is_some_and(|h| h.contains("docs/README.md"))
-        );
-    }
 
     #[test]
     fn feature_parse_is_strict() {

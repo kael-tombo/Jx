@@ -1,7 +1,7 @@
 # jx — a Cargo/uv-style front door for Java
 
 > **Status: under construction (M7 in progress: build, run, test, packaging,
-> Maven export, runtime images and Maven import).** This README describes the
+> Maven/Gradle import and export, runtime images).** This README describes the
 > intent of the project, not yet its shipped abilities; see
 > [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) for the honest state.
 
@@ -55,10 +55,12 @@ jx package --fat     # one merged jar: target/dist/hello-0.1.0-all.jar
 jx image             # target/dist/runtime: trimmed jlink runtime
 jx image --full      # all JDK modules when reflection needs them
 jx export maven --group-id com.example  # write a POM from the lockfile
+jx export gradle --group-id com.example # write build.gradle.kts + settings
 
-# Coming from Maven
-jx import            # convert ./pom.xml into ./project.toml
+# Coming from Maven or Gradle
+jx import            # convert ./pom.xml, build.gradle(.kts) into project.toml
 jx import service/pom.xml --dry-run  # print the manifest and notes only
+jx import app/build.gradle.kts --dry-run
 
 # Tests
 jx add --dev org.junit.platform:junit-platform-console-standalone
@@ -86,12 +88,19 @@ reflection loads modules at runtime (ADR 0009). `jx import` reads the
 project's effective POM (parents, properties and imported BOMs included),
 writes `project.toml` with exact direct-dependency pins and prints every
 approximation it made; it refuses to overwrite an existing manifest without
-`--force` (ADR 0010).
+`--force` (ADR 0010). `jx import` also accepts `build.gradle` and
+`build.gradle.kts`: it reads the declarative subset — string and map
+coordinates, `platform(...)` BOMs, `constraints`, literal `ext`/`val`
+variables, the Java toolchain and the application main class — and stops
+with a location on anything that needs script evaluation. Versionless
+dependencies rely on a platform BOM, including the Spring Boot plugin's own
+BOM (ADR 0011). `jx export gradle` writes a Kotlin-DSL build with the locked
+versions, dev dependencies as `testImplementation` and `[overrides]` as
+constraints.
 
-Not yet usable (they report their milestone): Gradle import/export (M7),
-Maven/Gradle compatibility and delegated builds (M7), annotation processors
-(deferred from M4), and a separate `update` command (`jx lock` re-resolves
-wanted prefixes today).
+Not yet usable: Maven/Gradle compatibility and delegated builds (M7),
+annotation processors (deferred from M4), and a separate `update` command
+(`jx lock` re-resolves wanted prefixes today).
 
 ## Design preview website
 
@@ -123,7 +132,8 @@ are in [docs/QUALITY.md](docs/QUALITY.md).
 * [docs/exit-codes.md](docs/exit-codes.md) — the exit-code contract
 * [docs/decisions/0007-maven-export.md](docs/decisions/0007-maven-export.md) — what `jx export maven` reproduces
 * [docs/decisions/0009-runtime-images.md](docs/decisions/0009-runtime-images.md) — jdeps/jlink image decisions
-* [docs/decisions/0010-maven-import.md](docs/decisions/0010-maven-import.md) — what `jx import` converts
+* [docs/decisions/0010-maven-import.md](docs/decisions/0010-maven-import.md) — what `jx import` converts from Maven
+* [docs/decisions/0011-gradle-interop.md](docs/decisions/0011-gradle-interop.md) — the Gradle import subset and export shape
 * [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — what does not work yet
 * [docs/LAUNCH.md](docs/LAUNCH.md) — website launch gates and owner inputs
 * [docs/QUALITY.md](docs/QUALITY.md) — measured site quality record

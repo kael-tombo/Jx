@@ -15,7 +15,8 @@
 //! * at equal depth the first declaration wins, also recorded;
 //! * `[overrides]` replace the version at every occurrence they match,
 //!   including the manifest's own pins, and each replacement is reported;
-//! * optional / non-transitive scopes / `pom` packages are skipped by name.
+//! * optional / non-transitive scopes (`test`, `provided`, `system`) and
+//!   `pom` packages are skipped by name.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -341,7 +342,15 @@ pub fn resolve(
                 continue;
             }
             match dep.scope.as_deref().unwrap_or("compile") {
-                "compile" | "runtime" | "provided" => {}
+                "compile" | "runtime" => {}
+                // Maven only uses provided for the declaring module's own
+                // compilation; consumers never inherit it. Including it here
+                // pulled build-only tools (annotation processors and the
+                // like) into every downstream graph.
+                "provided" => {
+                    skip("scope `provided` is not transitive".to_string());
+                    continue;
+                }
                 "test" => {
                     skip("scope `test` is not transitive".to_string());
                     continue;

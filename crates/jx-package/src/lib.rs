@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use jx_common::error::{JxError, Kind};
 
+pub mod gradle;
 pub mod image;
 pub mod maven;
 

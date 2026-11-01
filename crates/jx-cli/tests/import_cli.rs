@@ -1,4 +1,4 @@
-//! End-to-end tests of `jx import` against local POMs. No network is used:
+//! End-to-end tests of `jx import` against local builds. No network is used:
 //! every parent POM is on disk and every dependency carries a version.
 
 use std::path::Path;
@@ -167,6 +167,88 @@ fn existing_manifest_needs_force_but_dry_run_still_prints() {
     let written = std::fs::read_to_string(&manifest_path).unwrap();
     assert!(written.contains("name = \"app\""), "{written}");
     assert_ne!(written, "sentinel");
+}
+
+#[test]
+fn gradle_build_is_detected_and_imported() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.path().join("settings.gradle.kts"),
+        "rootProject.name = \"catalog\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.path().join("build.gradle.kts"),
+        r#"
+plugins {
+    application
+}
+
+version = "2.1.0"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation("com.google.guava:guava:33.4.8-jre")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+}
+
+application {
+    mainClass = "com.example.Catalog"
+}
+"#,
+    )
+    .unwrap();
+
+    let output = fixture.run(&["import"]);
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("build.gradle.kts"), "{stdout}");
+
+    let manifest = jx_manifest::parse(&fixture.path().join("project.toml"))
+        .expect("generated manifest parses");
+    assert_eq!(manifest.name, "catalog");
+    assert_eq!(manifest.version, "2.1.0");
+    assert_eq!(manifest.jdk, "21");
+    assert_eq!(manifest.main.as_deref(), Some("com.example.Catalog"));
+    assert_eq!(manifest.dependencies.len(), 1);
+    assert_eq!(manifest.dev_dependencies.len(), 1);
+    assert_eq!(
+        manifest.dependencies[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("33.4.8-jre")
+    );
+}
+
+#[test]
+fn gradle_dynamic_version_fails_without_writing() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.path().join("build.gradle"),
+        r#"
+dependencies {
+    implementation "com.google.guava:guava:$guavaVersion"
+}
+"#,
+    )
+    .unwrap();
+
+    let output = fixture.run(&["import"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("interpolates"), "{stderr}");
+    assert!(!fixture.path().join("project.toml").exists());
 }
 
 #[test]

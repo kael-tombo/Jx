@@ -77,4 +77,4 @@ make exact.
 * Users must review the generated POM before relying on it: plugin versions
   are pinned to known-good releases, BOM behaviour is inlined, and the
   groupId is a neutral default unless supplied.
-* Gradle export remains M7.
+* Gradle export is specified in ADR 0011.

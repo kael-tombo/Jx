@@ -631,7 +631,18 @@ fn interpolate_text(text: &str, ctxt: &Ctxt, depth: usize) -> Result<String, JxE
 fn lookup(name: &str, ctxt: &Ctxt) -> Option<String> {
     for (prefix, allow_parent) in [("project.", true), ("pom.", true)] {
         if let Some(rest) = name.strip_prefix(prefix) {
-            return lookup_project(rest, allow_parent, ctxt);
+            if let Some(value) = lookup_project(rest, allow_parent, ctxt) {
+                return Some(value);
+            }
+            // Maven also accepts `${project.<declared-property>}` as a
+            // legacy spelling of a POM property. Some POMs declare the whole
+            // name including the prefix (`<project.junit.bom.version>` in
+            // google-auth-library), so try the full spelling as well.
+            return ctxt
+                .props
+                .get(rest)
+                .or_else(|| ctxt.props.get(name))
+                .cloned();
         }
     }
     if let Some(v) = ctxt.props.get(name) {
@@ -672,6 +683,10 @@ fn lookup_project(rest: &str, allow_parent: bool, ctxt: &Ctxt) -> Option<String>
     }
 }
 
+/// Interpolate every textual field of a dependency, not just its version.
+/// Real POMs use `${project.groupId}` in `groupId` (Spring Data does) and
+/// properties in exclusions; leaving those raw turns a resolvable artifact
+/// into a literal placeholder path.
 fn interpolate_dependency(dep: &Dependency, ctxt: &Ctxt) -> Result<Dependency, JxError> {
     let text = |value: &Option<String>| -> Result<Option<String>, JxError> {
         match value.as_deref() {
@@ -679,10 +694,20 @@ fn interpolate_dependency(dep: &Dependency, ctxt: &Ctxt) -> Result<Dependency, J
             Some(v) => Ok(Some(interpolate_text(v, ctxt, 0)?)),
         }
     };
+    let required = |value: &str| interpolate_text(value, ctxt, 0);
+    let mut exclusions = Vec::with_capacity(dep.exclusions.len());
+    for (group_id, artifact_id) in &dep.exclusions {
+        exclusions.push((required(group_id)?, required(artifact_id)?));
+    }
     Ok(Dependency {
+        group_id: required(&dep.group_id)?,
+        artifact_id: required(&dep.artifact_id)?,
         version: text(&dep.version)?,
+        package_type: text(&dep.package_type)?,
         classifier: text(&dep.classifier)?,
-        ..dep.clone()
+        scope: text(&dep.scope)?,
+        optional: dep.optional,
+        exclusions,
     })
 }
 
@@ -917,6 +942,64 @@ mod tests {
         let orphan = pom(None, "orphan", None);
         let error = own_coords(&[orphan]).expect_err("no identity anywhere");
         assert!(error.message.contains("no groupId"), "{error}");
+    }
+
+    #[test]
+    fn project_prefixed_property_names_fall_back_to_declared_properties() {
+        let own = coords("g", "a", "1.2.3");
+        let mut props = HashMap::new();
+        props.insert("junit.bom.version".to_string(), "5.11.4".to_string());
+        assert_eq!(
+            interp("${project.junit.bom.version}", &props, &own, None).unwrap(),
+            "5.11.4"
+        );
+        // A POM may declare the whole `project.`-prefixed spelling as the
+        // property name (google-auth-library does).
+        let mut prefixed = HashMap::new();
+        prefixed.insert("project.junit.bom.version".to_string(), "5.9.0".to_string());
+        assert_eq!(
+            interp("${project.junit.bom.version}", &prefixed, &own, None).unwrap(),
+            "5.9.0"
+        );
+        // Structural names still win over a same-named property.
+        props.insert("version".to_string(), "0.0.1".to_string());
+        assert_eq!(
+            interp("${project.version}", &props, &own, None).unwrap(),
+            "1.2.3"
+        );
+    }
+
+    #[test]
+    fn dependency_coordinates_and_exclusions_are_interpolated() {
+        let own = coords("org.springframework.data", "spring-data-jpa", "4.1.0");
+        let mut props = HashMap::new();
+        props.insert("springdata.commons".to_string(), "4.1.0".to_string());
+        let ctxt = Ctxt {
+            props: &props,
+            coords: &own,
+            parent: None,
+        };
+        let dep = Dependency {
+            group_id: "${project.groupId}".into(),
+            artifact_id: "spring-data-commons".into(),
+            version: Some("${springdata.commons}".into()),
+            package_type: None,
+            classifier: None,
+            scope: None,
+            optional: false,
+            exclusions: vec![("${project.groupId}".into(), "old-module".into())],
+        };
+        let resolved = interpolate_dependency(&dep, &ctxt).expect("interpolated");
+        assert_eq!(resolved.group_id, "org.springframework.data");
+        assert_eq!(resolved.artifact_id, "spring-data-commons");
+        assert_eq!(resolved.version.as_deref(), Some("4.1.0"));
+        assert_eq!(
+            resolved.exclusions[0],
+            (
+                "org.springframework.data".to_string(),
+                "old-module".to_string()
+            )
+        );
     }
 
     #[test]

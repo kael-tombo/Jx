@@ -6,7 +6,8 @@
 //! unsupported packaging, version ranges, unresolved versions or SNAPSHOTs
 //! stop the import instead of producing a manifest that builds differently.
 //!
-//! Gradle import and delegated Maven/Gradle builds are still ahead.
+//! Gradle import lives in [`gradle`]; delegated Maven/Gradle builds are still
+//! ahead.
 
 use std::collections::HashSet;
 
@@ -27,12 +28,14 @@ pub struct ImportedManifest {
 }
 
 /// One direct dependency on its way into the manifest.
-struct ImportedDependency {
-    group_id: String,
-    artifact_id: String,
-    version: String,
-    classifier: Option<String>,
+pub(crate) struct ImportedDependency {
+    pub(crate) group_id: String,
+    pub(crate) artifact_id: String,
+    pub(crate) version: String,
+    pub(crate) classifier: Option<String>,
 }
+
+pub mod gradle;
 
 /// Convert an effective POM into a new jx manifest.
 ///
@@ -368,7 +371,7 @@ fn detect_jdk(pom: &EffectivePom) -> (Option<u32>, String) {
 }
 
 /// `8`, `1.8`, `17`, `21.0.2` and `1.8.0_202` all name a feature release.
-fn parse_java_version(raw: &str) -> Option<u32> {
+pub(crate) fn parse_java_version(raw: &str) -> Option<u32> {
     let raw = raw.trim();
     if let Some(rest) = raw.strip_prefix("1.") {
         return rest
@@ -412,7 +415,7 @@ fn check_ident(what: &str, value: &str, source: &str) -> Result<(), JxError> {
     Ok(())
 }
 
-fn render(
+pub(crate) fn render(
     name: &str,
     version: &str,
     jdk: u32,
@@ -448,7 +451,11 @@ fn render(
     out
 }
 
-fn push_dependency(out: &mut String, dep: &ImportedDependency, used: &mut HashSet<String>) {
+pub(crate) fn push_dependency(
+    out: &mut String,
+    dep: &ImportedDependency,
+    used: &mut HashSet<String>,
+) {
     let mut alias = dep.artifact_id.clone();
     let mut suffix = 2;
     while used.contains(&alias) {
@@ -475,7 +482,7 @@ fn toml_key(value: &str) -> String {
     toml_string(value)
 }
 
-fn toml_string(value: &str) -> String {
+pub(crate) fn toml_string(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
     for c in value.chars() {

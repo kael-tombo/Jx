@@ -88,7 +88,7 @@ fn scaffold_into(root: &Path, name: &str, lib: bool, in_place: bool) -> Result<(
                 ),
             )
             .at(root.join(marker).display().to_string())
-            .hint("`jx import` converts a Maven or Gradle build to a jx manifest (planned M7)"));
+            .hint("`jx import` converts a Maven or Gradle build to a jx manifest"));
         }
     }
     std::fs::create_dir_all(root).map_err(|e| {

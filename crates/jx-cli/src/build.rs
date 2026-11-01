@@ -474,6 +474,34 @@ fn maven_dependencies(
     Ok(out)
 }
 
+/// Map direct dependencies to Gradle entries. The lookup and version rules
+/// are the Maven exporter's; only the notation differs, so both exports name
+/// exactly the same locked artifacts.
+fn gradle_dependencies(
+    specs: &[manifest::DependencySpec],
+    jars: &[deps::LockedJar],
+    test: bool,
+) -> Result<Vec<jx_package::gradle::GradleDependency>, JxError> {
+    let mapped = maven_dependencies(specs, jars, test.then_some("test"))?;
+    Ok(mapped
+        .into_iter()
+        .map(|dependency| {
+            let mut out = jx_package::gradle::GradleDependency::new(
+                dependency.group_id,
+                dependency.artifact_id,
+                dependency.version,
+            );
+            if let Some(classifier) = dependency.classifier {
+                out = out.classifier(classifier);
+            }
+            if dependency.scope == Some("test") {
+                out = out.test();
+            }
+            out
+        })
+        .collect())
+}
+
 /// `jx export maven`: compile once (so a discovered main class is included),
 /// then write a POM that mirrors project.toml and the locked versions.
 pub fn export_maven(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxError> {
@@ -535,6 +563,104 @@ pub fn export_maven(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxErro
     println!("exported pom.xml ({main_count} main, {test_count} test, {managed_count} managed)");
     println!("  build with: mvn -f pom.xml package");
     Ok(())
+}
+
+/// `jx export gradle`: compile once (so a discovered main class is included),
+/// then write `build.gradle.kts` and `settings.gradle.kts` from project.toml
+/// and the locked versions.
+pub fn export_gradle(cli: &Cli, group_id: &str, force: bool) -> Result<(), JxError> {
+    let loaded = load(cli)?;
+    let build_path = loaded.manifest_dir.join("build.gradle.kts");
+    let settings_path = loaded.manifest_dir.join("settings.gradle.kts");
+    let groovy_path = loaded.manifest_dir.join("build.gradle");
+    if groovy_path.exists() {
+        return Err(JxError::new(
+            Kind::Io,
+            "a Groovy build.gradle already exists; jx would create a second build",
+        )
+        .at(groovy_path.display().to_string())
+        .hint("move or delete build.gradle, then run `jx export gradle` again"));
+    }
+    for path in [&build_path, &settings_path] {
+        if path.exists() && !force {
+            return Err(JxError::new(
+                Kind::Io,
+                format!(
+                    "{} already exists",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                ),
+            )
+            .at(path.display().to_string())
+            .hint("move it aside, or rerun with `jx export gradle --force` to overwrite"));
+        }
+    }
+
+    let deps = deps::classpaths(cli)?;
+    let feature = loaded.manifest.jdk_feature()?;
+    let jdk = ensure_jdk(cli, feature)?;
+    let (classes, _) = compile_main(&loaded, &jdk, &deps)?;
+    let main_class = package_main(&classes, loaded.manifest.main_class())?;
+
+    let mut dependencies =
+        gradle_dependencies(&loaded.manifest.dependencies, &deps.all_jars, false)?;
+    dependencies.extend(gradle_dependencies(
+        &loaded.manifest.dev_dependencies,
+        &deps.all_jars,
+        true,
+    )?);
+    let mut overrides = Vec::new();
+    for spec in &loaded.manifest.overrides {
+        if let Some(jar) = deps.all_jars.iter().find(|jar| {
+            jar.group_id == spec.group_id
+                && jar.artifact_id == spec.artifact_id
+                && jar.classifier.is_none()
+        }) {
+            overrides.push(jx_package::gradle::GradleDependency::new(
+                &jar.group_id,
+                &jar.artifact_id,
+                &jar.version,
+            ));
+        }
+    }
+
+    let main_count = dependencies
+        .iter()
+        .filter(|dependency| !dependency.test)
+        .count();
+    let test_count = dependencies.len() - main_count;
+    let constraint_count = overrides.len();
+    let export = jx_package::gradle::export(&jx_package::gradle::GradleProject {
+        group_id: group_id.to_string(),
+        artifact_id: loaded.manifest.name.clone(),
+        version: loaded.manifest.version.clone(),
+        java_release: feature,
+        main_class,
+        dependencies,
+        overrides,
+    })?;
+
+    let produced_settings = !settings_path.exists();
+    write_export(&settings_path, &export.settings)?;
+    if let Err(error) = write_export(&build_path, &export.build) {
+        // Do not leave a settings file behind when the build script failed.
+        if produced_settings {
+            let _ = std::fs::remove_file(&settings_path);
+        }
+        return Err(error);
+    }
+    println!(
+        "exported build.gradle.kts and settings.gradle.kts ({main_count} main, {test_count} test, {constraint_count} constraints)"
+    );
+    println!("  build with: gradle build");
+    Ok(())
+}
+
+fn write_export(path: &std::path::Path, text: &str) -> Result<(), JxError> {
+    std::fs::write(path, text).map_err(|e| {
+        JxError::new(Kind::Io, "cannot write the Gradle build")
+            .at(path.display().to_string())
+            .caused_by(e)
+    })
 }
 
 /// `jx run [-- args]`, with optional `--debug [--port N]`.

@@ -614,3 +614,79 @@ fn dev_scope_is_marked_and_shared_artifacts_stay_main() {
     assert!(flag("devonly"));
     assert!(!flag("shared"), "a main path makes the artifact main");
 }
+
+#[test]
+fn provided_scope_is_not_transitive() {
+    let specs = vec![
+        (
+            "ut/app/1.0/app-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(r#"
+  <groupId>ut</groupId>
+  <artifactId>app</artifactId>
+  <version>1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>mid</artifactId>
+      <version>1.0</version>
+    </dependency>
+  </dependencies>"#)),
+        ),
+        (
+            "ut/mid/1.0/mid-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(r#"
+  <groupId>ut</groupId>
+  <artifactId>mid</artifactId>
+  <version>1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>processor</artifactId>
+      <version>1.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>util</artifactId>
+      <version>1.0</version>
+    </dependency>
+  </dependencies>"#)),
+        ),
+        (
+            "ut/util/1.0/util-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>util</artifactId>\n  <version>1.0</version>",
+            )),
+        ),
+    ];
+    let harness = Harness::serve(specs);
+    let resolution = resolve(
+        &harness.loader(),
+        &harness.client,
+        &[dep("app", "ut:app:=1.0")],
+        &[],
+        &[],
+    )
+    .expect("resolved");
+    assert!(
+        resolution
+            .nodes
+            .iter()
+            .any(|node| node.artifact_id == "util")
+    );
+    assert!(
+        !resolution
+            .nodes
+            .iter()
+            .any(|node| node.artifact_id == "processor"),
+        "a dependency's provided scope never reaches its consumers"
+    );
+    assert!(
+        resolution
+            .skipped
+            .iter()
+            .any(|skip| skip.artifact_id == "processor" && skip.reason.contains("provided")),
+        "{:?}",
+        resolution.skipped
+    );
+}

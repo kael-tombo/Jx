@@ -91,3 +91,15 @@ engine = "maven"
   BOMs (their effect is already in the pins). It does not migrate exclusions,
   system-scope dependencies, plugin configuration or POM repositories; see
   [decisions/0010-maven-import.md](decisions/0010-maven-import.md).
+* `jx import` (Gradle) reads the declarative subset of `build.gradle` /
+  `build.gradle.kts`: literal coordinates, `platform(...)` BOMs (written as
+  `{ platform = … }` entries), `constraints` (written to `[overrides]`),
+  literal `ext`/`def`/`val` variables, the Java toolchain and the application
+  main class. Versionless dependencies rely on a platform entry; the Spring
+  Boot plugin's literal version adds `spring-boot-dependencies` as that
+  platform. Anything requiring script evaluation is refused. See
+  [decisions/0011-gradle-interop.md](decisions/0011-gradle-interop.md).
+* `jx export gradle` uses the locked versions: `[dependencies]` become
+  `implementation`, `[dev-dependencies]` become `testImplementation`,
+  `[overrides]` become `constraints`, `[run] main` selects the `application`
+  plugin and its `mainClass`. Platform BOMs are inlined, not re-exported.

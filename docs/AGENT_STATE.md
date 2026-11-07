@@ -1,6 +1,6 @@
 # Agent state
 
-Last updated: 2026-11-01
+Last updated: 2026-11-07
 Brief: `jx website: final master build prompt`, sections 3 and 11 in particular.
 
 ## Current state
@@ -11,17 +11,17 @@ claims no tagged release. W5 (launch) is still blocked on owner facts.
 | Area | State |
 | --- | --- |
 | Pages | 13: landing, vision, roadmap, privacy, accessibility, 404, seven docs pages |
-| Landing | Full architecture map under "How it works" with layer notes and a reused/adapter split, a reuse rule naming JBang and Chocolatey as adapter targets, and three plan horizons under "The plan, in public" |
-| Design system | Tokens, type scale, components, architecture map, plan horizons, patterns page, print stylesheet |
+| Landing | Inverted front-door hero with a toolchain rail; numbered chapters; a full-width five-property band; a combined stack/interop split; full architecture map with layer notes and a reused/adapter split; a reuse rule naming JBang and the OS package managers; three plan horizons under "The plan, in public" |
+| Design system | Tokens, editorial front-door layer (`editorial.css`), type scale, components, architecture map, plan horizons, patterns page, print stylesheet |
 | Framing | Cargo, uv and npm for Java; one run command across stacks is the destination, plain Java in V1; a workflow tool, not a runtime or a bundled JRE; V1 implemented, release pending |
 | JavaScript | Theme init, theme toggle, terminal, copy. All optional. |
 | Checks | claims, todos, contrast, shared markup, links, HTML validator, spellcheck |
 | Tests | 41 Playwright tests, axe on 13 pages in both themes |
 | Assets | Self-hosted subset fonts, SVG favicon, generated 1200x630 OG image |
 | CI | cargo jobs unchanged; a `site` job runs checks, tests, Lighthouse |
-| Deployment | GitHub Pages preview is live at https://kael-tombo.github.io/Jx/; the architecture and plan redesign is local, not yet published |
+| Deployment | GitHub Pages preview is live at https://kael-tombo.github.io/Jx/; the architectural and editorial redesign is local, not yet published |
 | Production | Blocked by 21 `{{TODO}}` placeholders |
-| Final verification | Site CI job and the earlier Pages deploy pass; 41 browser tests, `check` and spellcheck pass on the V1 status revision; Lighthouse measures 100 performance, 100 accessibility and 100 best practices; SEO 58 is the intentional preview gate |
+| Final verification | 41 browser tests, `check` and spellcheck pass on the redesign; 26 axe scans pass in light and dark; Lighthouse measures 99–100 performance, 100 accessibility and 100 best practices, with SEO 58 as the intentional preview gate; all 13 pages pass reflow at 320–1280 and at 200% text; landing, vision and roadmap print views were inspected |
 
 ## Decisions
 
@@ -35,8 +35,9 @@ claims no tagged release. W5 (launch) is still blocked on owner facts.
 * The owner's framing (2026-11-01): jx sits on top of existing tools such as
   JBang and Chocolatey to avoid reimplementing them. The architecture and plan
   state the boundary: jx owns the manifest, lockfile, command path and conflict
-  policy; the tools keep their jobs. JBang and Chocolatey are adapter targets,
-  not wired in V1.
+  policy; the tools keep their jobs. JBang is wired through `jx script`,
+  `jot.toml` import is wired, and the release renderer emits OS package
+  manifests; submission and installation stay with those tools.
 * 0100 — reference-manual design system, token palette, typography.
 * 0101 — design preview status, "Not released" instead of "Not started",
   placeholders and the claims checks.
@@ -48,6 +49,11 @@ claims no tagged release. W5 (launch) is still blocked on owner facts.
 * 0103 — the site may mark V1 behaviour `implemented` with evidence, while
   `shipped` stays reserved for a tag. The noindex preview and owner gates remain;
   milestone state is published without dates, percentages or gate claims.
+* The 2026-11-07 redesign moves the front door from a warm reference manual to
+  an editorial-technical surface: an inverted hero, square controls, numbered
+  chapters, a wide five-property band, a merged stack/interop split and a dark
+  follow band. `editorial.css` layers over the existing components, so docs,
+  code blocks and content claims stay intact.
 
 Earlier ADRs are the Rust project's; they are linked from `/docs/decisions`.
 
@@ -76,7 +82,7 @@ Earlier ADRs are the Rust project's; they are linked from `/docs/decisions`.
 
 ## Next step
 
-The architecture, plan and V1 status revision is local and ready to publish.
+The architectural and editorial redesign is local and ready to publish.
 Publish it, then have the owner fill `docs/LAUNCH.md`. Flip indexing as described
 there, choose whether the `_headers` CSP gap is acceptable, run the production
 gate and re-measure. Do not add a signup form before an endpoint exists. After a

@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/editorial.css">
   <link rel="stylesheet" href="css/print.css" media="print">
   <script src="js/theme-init.js"></script>
   <script type="module" src="js/theme.js"></script>
@@ -43,7 +44,7 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
+    <header class="site-header">
     <div class="wrap header-inner">
       <a class="wordmark" href="index.html">jx</a>
       <nav class="site-nav" aria-label="Main">
@@ -51,7 +52,11 @@
         <a href="roadmap.html">Roadmap</a>
         <a href="docs/quickstart.html">Docs</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      <div class="header-actions">
+        <p class="header-status">V1 implemented · release pending</p>
+        <a class="header-github" href="https://github.com/kael-tombo/Jx">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      </div>
     </div>
   </header>
 
@@ -60,8 +65,9 @@
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">V1 implemented · release pending</span>
-          <h1 class="hero-title" id="hero-title">The missing front door to Java.</h1>
-          <p class="hero-sub">A command-line tool for Java, in the spirit of Cargo, uv and npm. It puts one manifest and one command set over the JDK, Maven Central and the tools already on your machine, composing them rather than replacing them. It builds, tests, runs and packages from that one file. The goal is for <code>jx run</code> to work the same for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE.</p>
+          <h1 class="hero-title" id="hero-title">The missing front door to <span class="hero-em">Java.</span></h1>
+          <p class="hero-sub">A command-line tool for Java, in the spirit of Cargo, uv and npm. It puts one manifest and one command set over the JDK, Maven Central and the tools already on your machine, composing them rather than replacing them.</p>
+          <p class="hero-note">Build, test, run and package from that one file. The goal is for <code>jx run</code> to work the same for plain Java, Spring Boot, Quarkus, Vert.x and Jakarta EE.</p>
           <div class="hero-actions">
             <a class="button button--primary" href="docs/quickstart.html">Quickstart</a>
             <a class="button button--quiet" href="vision.html">Read the vision</a>
@@ -102,6 +108,17 @@ Hello, world!</code></pre>
           </figure>
         </div>
       </div>
+      <div class="wrap">
+        <ul class="hero-tools" aria-label="Tools jx composes">
+          <li>Eclipse Temurin</li>
+          <li>Maven Central</li>
+          <li>javac</li>
+          <li>JUnit</li>
+          <li>Maven</li>
+          <li>Gradle</li>
+          <li>JBang</li>
+        </ul>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="problem-title">
@@ -131,14 +148,13 @@ Hello, world!</code></pre>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="smooth-title">
-      <div class="wrap section-grid">
-        <div class="section-head">
+    <section class="section section--wide" aria-labelledby="smooth-title">
+      <div class="wrap">
+        <div class="section-head section-head--wide">
           <h2 id="smooth-title">What smooth means.</h2>
           <p class="section-note">Five properties the design is judged against.</p>
         </div>
-        <div class="section-body">
-          <div class="property-grid">
+        <div class="property-grid">
             <div class="property">
               <h3>One tool, one file.</h3>
               <p>A project has one manifest and one lockfile. The JDK pin, dependencies and build settings live together.</p>
@@ -159,7 +175,6 @@ Hello, world!</code></pre>
               <h3>One default path.</h3>
               <p>Most projects do not need a build script. When they do, the manifest can delegate to one.</p>
             </div>
-          </div>
         </div>
       </div>
     </section>
@@ -181,7 +196,7 @@ Hello, world!</code></pre>
             <div class="reuse-rule-body">
               <p><strong>jx owns</strong> the manifest, the lockfile, the command vocabulary and the conflict policy — the parts no single tool owns.</p>
               <p><strong>The tools keep</strong> their jobs: the JDK, Maven Central, javac, JUnit, Maven, Gradle, JBang and the platform installers.</p>
-              <p class="reuse-rule-note">JBang and Chocolatey are adapter targets, not wired in V1. The dashed nodes below mark what is planned.</p>
+              <p class="reuse-rule-note">JBang is wired through <code>jx script</code>. Chocolatey, Homebrew, Scoop and winget receive generated release manifests; installs stay theirs. The dashed nodes mark what is not wired.</p>
             </div>
           </div>
 
@@ -197,7 +212,7 @@ Hello, world!</code></pre>
                       <span class="arch-chip">add · remove</span>
                       <span class="arch-chip">lock · fetch</span>
                       <span class="arch-chip">build · test</span>
-                      <span class="arch-chip">run</span>
+                      <span class="arch-chip">run · script</span>
                       <span class="arch-chip">package · image</span>
                       <span class="arch-chip">import · export</span>
                       <span class="arch-chip">jdk</span>
@@ -286,15 +301,15 @@ Hello, world!</code></pre>
                     </div>
                   </div>
                   <div class="arch-tool-group arch-tool-group--targets">
-                    <p class="arch-sublabel">Adapter targets · not wired in V1</p>
+                    <p class="arch-sublabel">Adapters · opt-in</p>
                     <div class="arch-grid arch-grid--2">
-                      <div class="arch-node arch-node--later">
+                      <div class="arch-node arch-node--reused">
                         <span class="arch-node-title">JBang</span>
-                        <span class="arch-node-detail">Scripts and single-file runs.</span>
+                        <span class="arch-node-detail">Scripts and single-file runs through <code>jx script</code>.</span>
                       </div>
-                      <div class="arch-node arch-node--later">
-                        <span class="arch-node-title">Chocolatey, Homebrew and Scoop</span>
-                        <span class="arch-node-detail">OS install paths.</span>
+                      <div class="arch-node arch-node--reused">
+                        <span class="arch-node-title">Chocolatey, Homebrew, Scoop and winget</span>
+                        <span class="arch-node-detail">Generated release manifests; submission and OS installs stay theirs.</span>
                       </div>
                     </div>
                   </div>
@@ -317,7 +332,7 @@ Hello, world!</code></pre>
               <li><span class="swatch swatch--reused" aria-hidden="true"></span>Existing tool, reused or targeted</li>
               <li><span class="swatch swatch--later" aria-hidden="true"></span>Planned for later</li>
             </ul>
-            <figcaption id="arch-caption"><strong>Reading.</strong> Commands read and write the state, then call one or more engines. The engines reuse Eclipse Temurin, Maven Central, the JDK's own tools, Maven and Gradle. JBang and the platform installers are adapter targets, not wired in V1. There is no daemon and no hidden build script. A Maven plugin host is planned beside the build engine later.</figcaption>
+            <figcaption id="arch-caption"><strong>Reading.</strong> Commands read and write the state, then call one or more engines. The engines reuse Eclipse Temurin, Maven Central, the JDK's own tools, Maven and Gradle. <code>jx script</code> hands scripts to JBang; the release workflow generates manifests for the OS package managers, which still own installation. There is no daemon and no hidden build script. A Maven plugin host is planned beside the build engine later.</figcaption>
           </figure>
 
           <div class="arch-path">
@@ -349,13 +364,16 @@ Hello, world!</code></pre>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="stacks-title">
-      <div class="wrap section-grid">
-        <div class="section-head">
+    <section class="section section--wide" aria-labelledby="stacks-title">
+      <div class="wrap">
+        <div class="section-head section-head--wide">
           <h2 id="stacks-title">One command for every stack.</h2>
+          <p class="section-note">The destination is one command vocabulary for Java. V1 covers plain Java; framework adapters come later. Maven and Gradle remain the way in and the way out.</p>
         </div>
-        <div class="section-body">
-          <p>The destination is one command vocabulary for Java. The same <code>jx run</code> is the goal whether the project is plain Java or a framework. Cargo, uv and npm each provide one for their ecosystem. V1 covers plain Java; framework adapters come later.</p>
+        <div class="split-grid">
+          <div>
+            <h3>Plain Java today, every stack next.</h3>
+            <p>The same <code>jx run</code> is the goal whether the project is plain Java or a framework. Cargo, uv and npm each provide one for their ecosystem. V1 covers plain Java; framework adapters come later.</p>
           <section class="table-wrap" aria-labelledby="stacks-caption" tabindex="0">
             <table>
               <caption id="stacks-caption">Plain Java is implemented. No framework adapter exists yet.</caption>
@@ -396,17 +414,10 @@ Hello, world!</code></pre>
             </table>
           </section>
           <p class="table-note">The same <code>jx run</code> is the goal in every row. No framework adapter is scheduled yet.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="interop-title">
-      <div class="wrap section-grid">
-        <div class="section-head">
-          <h2 id="interop-title">Works with Maven and Gradle.</h2>
-        </div>
-        <div class="section-body">
-          <p>V1 provides three levels of interop. Gradle support covers a declarative subset of its build model.</p>
+          </div>
+          <div>
+            <h3 id="interop-title">Maven and Gradle are the way in and out.</h3>
+            <p>V1 provides three levels of interop. Gradle support covers a declarative subset of its build model.</p>
           <section class="table-wrap" aria-labelledby="interop-caption" tabindex="0">
             <table>
               <caption id="interop-caption">The interop modes implemented in V1.</caption>
@@ -437,6 +448,7 @@ Hello, world!</code></pre>
             </table>
           </section>
           <p class="table-note">Export is the exit: a project can leave with a build file it already understands. Maven plugins are not run natively in V1; delegated builds call Maven or Gradle, so existing plugins run there. A plugin host is planned.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -523,7 +535,7 @@ Hello, world!</code></pre>
             <p class="plan-thesis-note">One manifest, one lockfile, one command set over the tools that already exist. Maven Central stays. Export remains the exit.</p>
           </div>
 
-          <p class="note plan-reuse"><strong>Own the path, not the wheel.</strong> jx composes the JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform installers. JBang and Chocolatey are adapter targets; neither is wired in V1.</p>
+          <p class="note plan-reuse"><strong>Own the path, not the wheel.</strong> jx composes the JDK, Maven Central, javac, JUnit, Maven, Gradle, JBang for scripts and the platform installers. The first adapters are wired: <code>jx script</code> delegates to JBang, and release manifests cover Chocolatey, Homebrew, Scoop and winget.</p>
 
           <div class="plan-horizons">
             <article class="plan-horizon plan-horizon--v1">
@@ -546,17 +558,17 @@ Hello, world!</code></pre>
             <article class="plan-horizon plan-horizon--after">
               <div class="plan-horizon-head">
                 <p class="plan-kicker">After V1 · The same command</p>
-                <span class="badge badge--quiet" data-status="idea">Unscheduled</span>
+                <span class="badge badge--quiet" data-status="draft">Started</span>
               </div>
               <h3>One <code>jx run</code> across stacks.</h3>
               <ul class="plan-list">
                 <li><strong>Framework adapters.</strong> Spring Boot, Quarkus, Vert.x, Micronaut and Jakarta EE start with the same command.</li>
                 <li><strong>Languages.</strong> Kotlin and Scala compilers join the same manifest and flow.</li>
-                <li><strong>Tool adapters.</strong> JBang for scripts and single-file programs; Chocolatey, Homebrew and Scoop for OS installs. Evaluate each before wiring it.</li>
+                <li><strong>Tool adapters.</strong> JBang scripts and <code>jot.toml</code> import are wired; Chocolatey, Homebrew, Scoop and winget manifests are generated at release time. Framework adapters remain unscheduled.</li>
                 <li><strong>Plugin host.</strong> A Maven plugin host sits beside the build engine.</li>
                 <li><strong>Framework reload.</strong> Hot reload stays with each framework; jx does not reimplement it.</li>
               </ul>
-              <p class="plan-foot">The destination is shared; no adapter is scheduled.</p>
+              <p class="plan-foot">The destination is shared; framework adapters remain unscheduled.</p>
             </article>
 
             <article class="plan-horizon plan-horizon--edge">
@@ -569,7 +581,7 @@ Hello, world!</code></pre>
                 <li><strong>Not a runtime.</strong> No new JDK, no replacement JRE, no fix for the JRE's size.</li>
                 <li><strong>Not a deployment tool.</strong> Images are packaging; shipping stays out of scope.</li>
                 <li><strong>Not a registry.</strong> Maven Central stays the source; export is the exit.</li>
-                <li><strong>Not a package manager.</strong> OS installs stay with Chocolatey, Homebrew, Scoop or the platform's own installer.</li>
+                <li><strong>Not a package manager.</strong> OS installs stay with Chocolatey, Homebrew, Scoop, winget or the platform's own installer; jx only generates release manifests for them.</li>
                 <li><strong>No new plugin ecosystem.</strong> Maven plugins stay Maven's; jx delegates or hosts them later.</li>
                 <li><strong>No telemetry.</strong> V1 collects nothing.</li>
               </ul>
@@ -666,7 +678,7 @@ Hello, world!</code></pre>
             </details>
             <details>
               <summary>How is it different from JBang, Amper and jot?</summary>
-              <p>Each solves part of the problem. JBang runs scripts and single files; jx is aimed at the project workflow across the tools that already exist, not at replacing them. JBang is an adapter target, not wired yet.</p>
+              <p>Each solves part of the problem. JBang runs scripts and single files; jx delegates those through <code>jx script</code> and stays aimed at the project workflow across the tools that already exist. A Java-only, single-module jot project can be imported with <code>jx import</code>; Maven and Gradle stay the full interop path.</p>
             </details>
             <details>
               <summary>What about containers and production?</summary>
@@ -681,7 +693,7 @@ Hello, world!</code></pre>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="follow-title">
+    <section class="section section--follow" aria-labelledby="follow-title">
       <div class="wrap follow">
         <div>
           <h2 id="follow-title">Follow the project.</h2>
@@ -695,20 +707,34 @@ Hello, world!</code></pre>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-inner">
+    <footer class="site-footer">
+    <div class="wrap footer-grid">
       <div class="footer-brand">
         <a class="footer-wordmark" href="index.html">jx</a>
         <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
-      <nav class="footer-nav" aria-label="Footer">
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-title">Product</p>
         <a href="vision.html">Vision</a>
         <a href="roadmap.html">Roadmap</a>
+        <a href="docs/quickstart.html">Quickstart</a>
+      </nav>
+      <nav class="footer-col" aria-label="Reference">
+        <p class="footer-title">Reference</p>
+        <a href="docs/commands.html">Commands</a>
+        <a href="docs/concepts.html">Concepts</a>
+        <a href="docs/maven-gradle.html">Maven and Gradle</a>
+      </nav>
+      <nav class="footer-col" aria-label="Project">
+        <p class="footer-title">Project</p>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
         <a href="privacy.html">Privacy</a>
         <a href="accessibility.html">Accessibility</a>
-        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
+    </div>
+    <div class="wrap footer-base">
       <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-meta">V1 implemented · release pending</p>
     </div>
   </footer>
 </body>

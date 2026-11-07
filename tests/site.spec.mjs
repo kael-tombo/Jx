@@ -118,7 +118,8 @@ test.describe("docs", () => {
     await page.goto("/docs/commands.html");
     await expect(page.locator(".docs-nav a[aria-current='page']")).toHaveText("Commands");
     await expect(page.locator(".doc-head .badge")).toContainText("V1 implemented");
-    await expect(page.locator("tbody tr")).toHaveCount(19);
+    await expect(page.locator("tbody tr")).toHaveCount(21);
+    await expect(page.locator("tbody")).toContainText("jx script");
     await expect(page.locator("tbody")).toContainText("jx package");
     await expect(page.locator("tbody")).toContainText("jx image");
     await expect(page.locator("p.note")).toContainText("Every command in this table is implemented in the V1 source tree");
@@ -149,7 +150,7 @@ test.describe("system dark theme", () => {
     await expect(page.locator(".theme-toggle")).toHaveText("Light theme");
     await expect(page.locator(".theme-toggle")).toHaveAttribute("aria-pressed", "true");
     const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(background).toBe("rgb(14, 17, 22)");
+    expect(background).toBe("rgb(11, 14, 11)");
   });
 });
 

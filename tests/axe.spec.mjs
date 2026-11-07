@@ -20,6 +20,7 @@ const pages = [
 async function seriousViolations(page, url, theme) {
   if (theme === "dark") await page.emulateMedia({ colorScheme: "dark" });
   await page.goto(url);
+  await page.evaluate(() => document.fonts.ready);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

@@ -14,21 +14,26 @@
   <link rel="stylesheet" href="../css/tokens.css">
   <link rel="stylesheet" href="../css/base.css">
   <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/editorial.css">
   <link rel="stylesheet" href="../css/print.css" media="print">
   <script src="../js/theme-init.js"></script>
   <script type="module" src="../js/theme.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
+    <header class="site-header">
     <div class="wrap header-inner">
       <a class="wordmark" href="../index.html">jx</a>
       <nav class="site-nav" aria-label="Main">
         <a href="../vision.html">Vision</a>
         <a href="../roadmap.html">Roadmap</a>
-        <a href="quickstart.html" aria-current="page">Docs</a>
+        <a href="../docs/quickstart.html" aria-current="page">Docs</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      <div class="header-actions">
+        <p class="header-status">V1 implemented · release pending</p>
+        <a class="header-github" href="https://github.com/kael-tombo/Jx">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      </div>
     </div>
   </header>
 
@@ -95,6 +100,11 @@
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
+                <th scope="row"><code>jx update</code></th>
+                <td>Refresh wanted dependency prefixes and report version changes; pass a direct dependency to keep the other direct roots locked.</td>
+                <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
+              </tr>
+              <tr>
                 <th scope="row"><code>jx fetch</code></th>
                 <td>Download and verify the artifacts the lockfile pins.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
@@ -106,12 +116,12 @@
               </tr>
               <tr>
                 <th scope="row"><code>jx why</code></th>
-                <td>Explain why an artifact is in the graph.</td>
+                <td>Explain why an artifact is in the app graph or the annotation-processor graph.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
                 <th scope="row"><code>jx build</code></th>
-                <td>Compile main sources and resources.</td>
+                <td>Compile main sources and resources. Under a delegated engine, tool flags follow <code>--</code>.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
@@ -120,8 +130,13 @@
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
+                <th scope="row"><code>jx script</code></th>
+                <td>Delegate a JBang script and its arguments; JBang must be installed.</td>
+                <td><span class="badge" data-status="implemented" data-evidence="JBang adapter tests" data-since="1.0.0">Implemented</span></td>
+              </tr>
+              <tr>
                 <th scope="row"><code>jx test</code></th>
-                <td>Compile test sources and run JUnit.</td>
+                <td>Compile test sources and run JUnit. Under a delegated engine, the tool's selectors follow <code>--</code>.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
@@ -136,7 +151,7 @@
               </tr>
               <tr>
                 <th scope="row"><code>jx clean</code></th>
-                <td>Remove build output.</td>
+                <td>Remove build output. Under a delegated engine, tool flags follow <code>--</code>.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
@@ -146,7 +161,7 @@
               </tr>
               <tr>
                 <th scope="row"><code>jx import</code></th>
-                <td>Read a Maven or Gradle project into a manifest.</td>
+                <td>Read a Maven, Gradle or Java-only jot project into a manifest.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
               <tr>
@@ -161,7 +176,7 @@
               </tr>
               <tr>
                 <th scope="row"><code>jx doctor</code></th>
-                <td>Check home, cache, network, system Java and disk.</td>
+                <td>Check home, cache, network, system Java, disk, and the optional JBang and package-manager tools.</td>
                 <td><span class="badge" data-status="implemented" data-evidence="V1 source tree and test suite" data-since="1.0.0">Implemented</span></td>
               </tr>
             </tbody>
@@ -172,26 +187,44 @@
         <p>One small command set covers the common path. The three commands used by the quickstart are <code>jx new</code>, <code>jx run</code> and <code>jx test</code>.</p>
         <p>Import and export are the boundary with existing builds. <a href="maven-gradle.html">Maven and Gradle</a> explains the three interop levels. <a href="concepts.html">Concepts</a> explains the manifest and lockfile the commands maintain.</p>
 
+        <h2 id="adapters">Adapters</h2>
+        <p><code>jx script</code> is opt-in and delegating, not a second runner. It resolves <code>JX_JBANG</code> first, then <code>jbang</code> on <code>PATH</code>; inside a jx project it exports the pinned JDK through <code>JAVA_HOME</code>. JBang owns script dependencies, its cache and its exit code.</p>
+        <p><code>jx import</code> also reads a Java-only, single-module <code>jot.toml</code>, including a <code>libs.versions.toml</code> catalog and <code>[processors]</code>. Workspaces, path dependencies, Kotlin toolchains and non-Temurin pins are refused rather than guessed at.</p>
+
         <h2 id="not-fixed">Before the tag</h2>
         <p>The command set is fixed for V1. Flags, machine-readable output and exit codes can still change before v1.0.0 is tagged.</p>
       </article>
     </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-inner">
+    <footer class="site-footer">
+    <div class="wrap footer-grid">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
         <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
-      <nav class="footer-nav" aria-label="Footer">
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-title">Product</p>
         <a href="../vision.html">Vision</a>
         <a href="../roadmap.html">Roadmap</a>
+        <a href="../docs/quickstart.html">Quickstart</a>
+      </nav>
+      <nav class="footer-col" aria-label="Reference">
+        <p class="footer-title">Reference</p>
+        <a href="../docs/commands.html">Commands</a>
+        <a href="../docs/concepts.html">Concepts</a>
+        <a href="../docs/maven-gradle.html">Maven and Gradle</a>
+      </nav>
+      <nav class="footer-col" aria-label="Project">
+        <p class="footer-title">Project</p>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
         <a href="../privacy.html">Privacy</a>
         <a href="../accessibility.html">Accessibility</a>
-        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
+    </div>
+    <div class="wrap footer-base">
       <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-meta">V1 implemented · release pending</p>
     </div>
   </footer>
 </body>

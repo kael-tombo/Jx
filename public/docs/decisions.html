@@ -14,21 +14,26 @@
   <link rel="stylesheet" href="../css/tokens.css">
   <link rel="stylesheet" href="../css/base.css">
   <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/editorial.css">
   <link rel="stylesheet" href="../css/print.css" media="print">
   <script src="../js/theme-init.js"></script>
   <script type="module" src="../js/theme.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
+    <header class="site-header">
     <div class="wrap header-inner">
       <a class="wordmark" href="../index.html">jx</a>
       <nav class="site-nav" aria-label="Main">
         <a href="../vision.html">Vision</a>
         <a href="../roadmap.html">Roadmap</a>
-        <a href="quickstart.html" aria-current="page">Docs</a>
+        <a href="../docs/quickstart.html" aria-current="page">Docs</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      <div class="header-actions">
+        <p class="header-status">V1 implemented · release pending</p>
+        <a class="header-github" href="https://github.com/kael-tombo/Jx">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      </div>
     </div>
   </header>
 
@@ -131,6 +136,26 @@
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
               </tr>
               <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0014-annotation-processors.md">0014</a></th>
+                <td>Annotation processors from a separate <code>[processors]</code> graph and lockfile schema 3.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0015-jbang-script-adapter.md">0015</a></th>
+                <td>Delegate scripts and single-file programs to JBang with <code>jx script</code>.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0016-jot-import.md">0016</a></th>
+                <td>Import the Java-only, single-module subset of <code>jot.toml</code>.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
+                <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0017-os-package-manifests.md">0017</a></th>
+                <td>Generate Chocolatey, Homebrew, Scoop and winget manifests from release checksums.</td>
+                <td><span class="badge" data-status="accepted">Accepted</span></td>
+              </tr>
+              <tr>
                 <th scope="row"><a href="https://github.com/kael-tombo/Jx/blob/main/docs/decisions/0100-site-design-system.md">0100</a></th>
                 <td>Warm-paper reference-manual design, type scale and contrast pairs for this site.</td>
                 <td><span class="badge" data-status="accepted">Accepted</span></td>
@@ -164,20 +189,34 @@
     </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-inner">
+    <footer class="site-footer">
+    <div class="wrap footer-grid">
       <div class="footer-brand">
         <a class="footer-wordmark" href="../index.html">jx</a>
         <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
-      <nav class="footer-nav" aria-label="Footer">
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-title">Product</p>
         <a href="../vision.html">Vision</a>
         <a href="../roadmap.html">Roadmap</a>
+        <a href="../docs/quickstart.html">Quickstart</a>
+      </nav>
+      <nav class="footer-col" aria-label="Reference">
+        <p class="footer-title">Reference</p>
+        <a href="../docs/commands.html">Commands</a>
+        <a href="../docs/concepts.html">Concepts</a>
+        <a href="../docs/maven-gradle.html">Maven and Gradle</a>
+      </nav>
+      <nav class="footer-col" aria-label="Project">
+        <p class="footer-title">Project</p>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
         <a href="../privacy.html">Privacy</a>
         <a href="../accessibility.html">Accessibility</a>
-        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
+    </div>
+    <div class="wrap footer-base">
       <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-meta">V1 implemented · release pending</p>
     </div>
   </footer>
 </body>

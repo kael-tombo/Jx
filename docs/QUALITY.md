@@ -1,6 +1,6 @@
 # Website quality record
 
-Measured 2026-11-01 against the files in this workspace. Every figure below comes
+Measured 2026-11-07 against the files in this workspace. Every figure below comes
 from a command in the reproduction section; none is estimated. The site is a
 V1 preview, so the SEO result is deliberately below target until launch.
 
@@ -12,10 +12,10 @@ V1 preview, so the SEO result is deliberately below target until launch.
 | Every claim traceable; no banned hype | Pass | `check-claims`: 13 pages, zero banned words, zero unregistered numbers |
 | No release claimed | Pass | V1 pages use `implemented` with evidence; no page uses `shipped`; the install step says to build from source until a tag exists |
 | Rename in one command, no trace | Pass | Dry run in a throwaway clone: 20 files, 179 occurrences renamed, no old-name match |
-| Lighthouse mobile, all categories 95+ | Performance, accessibility and best practices 100; SEO is 58 | SEO is blocked by intentional `noindex` and placeholder canonicals; see below |
+| Lighthouse mobile, all categories 95+ | Performance 99–100, accessibility and best practices 100; SEO is 58 | SEO is blocked by intentional `noindex` and placeholder canonicals; see below |
 | axe: no serious or critical issues | Pass | 26 scans: 13 pages, light and dark |
 | Shared header and footer | Pass | `check-shared`: 13 pages identical after path and current-page normalisation |
-| HTML, links and spelling | Pass | Validator 13 pages; link check 13 pages and 4 stylesheets; cspell 13 files |
+| HTML, links and spelling | Pass | Validator 13 pages; link check 13 pages and 5 stylesheets; cspell 13 files |
 | Production gate | Blocked, as intended | 21 `{{TODO}}` placeholders remain in `public/` |
 | GitHub Pages preview | Deployed and checked before this redesign | https://kael-tombo.github.io/Jx/ |
 
@@ -25,17 +25,17 @@ Lighthouse 12, mobile emulation, single run per URL:
 
 | URL | Performance | Accessibility | Best practices | SEO | FCP | LCP | CLS | TBT |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/` | 100 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0.001 | 90 ms |
-| `/vision.html` | 100 | 100 | 100 | 58 | 1.2 s | 1.4 s | 0 | 0 ms |
-| `/docs/commands.html` | 100 | 100 | 100 | 58 | 1.2 s | 1.4 s | 0 | 0 ms |
+| `/` | 99 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0.001 | 120 ms |
+| `/vision.html` | 100 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0 | 30 ms |
+| `/docs/commands.html` | 99 | 100 | 100 | 58 | 1.1 s | 1.4 s | 0.002 | 120 ms |
 
 * LCP target: 2.0 s or less. Measured 1.4 s on all three URLs.
 * CLS target: 0.05 or less. Measured 0 to 0.001 across repeated runs.
 * Landing JavaScript target: 10 KB gzipped or less. Measured **2,188 bytes**
   (`theme-init` 244, `theme` 576, `terminal` 1,368). All four modules are 2,723
   bytes.
-* Fonts are 41,220 bytes total. The landing page transfers 69 KiB; the docs page
-  61 KiB. No raster images load on any page.
+* Fonts are 41,220 bytes total. The landing page transfers 75 KiB, vision 68 KiB
+  and the docs page 67 KiB. No raster images load on any page.
 * No render-blocking font request: fonts are self-hosted, two are preloaded, and
   `font-display: swap` is set.
 
@@ -52,8 +52,9 @@ The GitHub Pages preview is at https://kael-tombo.github.io/Jx/, deployed by
 succeeded on 2026-11-01. A live browser pass loaded all 13 pages with one H1,
 loaded fonts, no console errors and no failed assets; the custom 404 returned
 404 and loaded its stylesheet. The root, CSS, JavaScript and font responses were
-200 with the expected content types. The architecture and plan redesign is
-local, including the reuse boundary, and has not been published yet.
+200 with the expected content types. The editorial-technical redesign is local,
+including the inverted front door, numbered chapters, merged stack/interop
+section and new shared header/footer, and has not been published yet.
 
 GitHub Pages does not apply `_headers`. The live preview therefore has no CSP
 header, no frame denial and no permissions policy. That remains a launch gap;
@@ -66,18 +67,23 @@ the local `_headers` file is not evidence of a live header.
   result is empty.
 * 39 contrast pairs pass: 13 pairs in each of light, dark-by-system and
   dark-by-toggle. Text needs 4.5:1; UI borders need 3:1. Lowest text pair is
-  4.88:1 (links on paper); lowest UI pair is 3.40:1.
+  4.63:1 (links on paper); lowest UI pair is 3.45:1 (copy button border on
+  code).
 * Playwright covers the skip link moving focus, keyboard activation of native
   FAQ controls, the theme toggle's `aria-pressed` and label, copy announcement,
   reduced motion, JavaScript off, the 404 page and the 375px layout.
 * Reflow: all 13 pages at 320, 375, 640, 768 and 1280 pixels have no horizontal
   page overflow; all 13 also pass with the root font size at 200 percent at
-  1280 pixels. Wide tables scroll inside their own labelled region.
+  1280 pixels. Wide tables scroll inside their own labelled region. The
+  five-property band, stack/interop split and docs shell were checked at these
+  widths after the redesign.
 * The terminal's static transcript is the accessible copy. The animation is
   `aria-hidden`, plays once, is disabled under `prefers-reduced-motion`, and has
   Pause and Show all controls.
-* Print styles were rendered for `/vision` and `/roadmap` and inspected; both
-  hide navigation and buttons and keep the footer notice.
+* Print styles were rendered for the landing page, `/vision` and `/roadmap`
+  and inspected. Navigation and buttons are hidden, the full static terminal
+  transcript prints instead of the animation, closed FAQ answers print open,
+  and the footer notice remains.
 
 Not verified: a screen-reader session, a real mobile device, Firefox or WebKit,
 or an independent audit by a disabled user. The accessibility page says so.
@@ -99,12 +105,13 @@ or an independent audit by a disabled user. The accessibility page says so.
   the JRE's size; `jlink` is optional deployment packaging.
 * The landing's architecture map covers the command surface, state and local
   store, six engines, the existing tools and the later plugin host. Each layer
-  says what it does; the tools layer is split into reused now and adapter
-  targets. A reuse rule states the ownership boundary: jx owns the manifest,
+  says what it does; the tools layer is split into reused tools and opt-in
+  adapters. A reuse rule states the ownership boundary: jx owns the manifest,
   lockfile and path; the JDK, Maven Central, Maven, Gradle and the platform
-  tools keep their jobs. JBang and Chocolatey are labeled adapter targets, not
-  wired in V1. The plan covers V1, after V1, the boundary and M0–M8; every item
-  is implemented, unscheduled or deliberate.
+  tools keep their jobs. JBang is wired through `jx script`, `jot.toml` import
+  is wired, and the release renderer emits OS package manifests; installs stay
+  with those tools. The plan covers V1, after V1, the boundary and M0–M8;
+  every item is implemented, unscheduled or deliberate.
 * The terminal caption stays visible in every state and says the output is
   illustrative and not a recording.
 * Milestones say "Implemented" because the 1.0.0 source tree contains M0–M8;
@@ -162,9 +169,9 @@ result. The copy was discarded.
 * GitHub Pages cannot apply `_headers`, so the deployed preview has no CSP
   header, frame denial or permissions policy.
 * SEO is a launch gate, not a pass.
-* The redesigned architecture and plan sections were reviewed from screenshots
-  at 375, 768 and 1280; the 41-test suite covers both axe themes. No independent
-  designer reviewed the result.
+* The editorial redesign was reviewed from screenshots at 375, 768 and 1280 in
+  light and dark, and the landing print view was rendered; the 41-test suite
+  covers both axe themes. No independent designer reviewed the result.
 
 ## Sign-off
 

@@ -14,13 +14,14 @@
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/editorial.css">
   <link rel="stylesheet" href="css/print.css" media="print">
   <script src="js/theme-init.js"></script>
   <script type="module" src="js/theme.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
+    <header class="site-header">
     <div class="wrap header-inner">
       <a class="wordmark" href="index.html">jx</a>
       <nav class="site-nav" aria-label="Main">
@@ -28,7 +29,11 @@
         <a href="roadmap.html">Roadmap</a>
         <a href="docs/quickstart.html">Docs</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      <div class="header-actions">
+        <p class="header-status">V1 implemented · release pending</p>
+        <a class="header-github" href="https://github.com/kael-tombo/Jx">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme">Dark theme</button>
+      </div>
     </div>
   </header>
 
@@ -53,7 +58,7 @@
             <h2 id="layer-title">A platform tool, not a runtime</h2>
             <p>Two arguments are often made together: Java needs one tool for the everyday workflow, and the JRE is larger than it needs to be. They point at different layers. jx is aimed at the first: one manifest, one JDK pin, one command set, dependencies from Maven Central.</p>
             <p>It does not add a runtime to every project or ask the JDK to ship more. It installs the JDK a project pins and reuses it. The optional runtime image uses the JDK's own <code>jlink</code> as packaging for a deployment, not as a change to what the JDK ships.</p>
-            <p>The same rule applies inside the workflow. jx is not a new package manager, build tool or script runner. It is the layer that composes the JDK, Maven Central, javac, JUnit, Maven, Gradle and the platform's installers. If a tool already owns the job, jx calls it. JBang and Chocolatey are adapter targets; neither is wired in V1.</p>
+            <p>The same rule applies inside the workflow. jx is not a new package manager, build tool or script runner. It is the layer that composes the JDK, Maven Central, javac, JUnit, Maven, Gradle, JBang for scripts and the platform's installers. If a tool already owns the job, jx calls it: <code>jx script</code> delegates to JBang, and the release workflow generates manifests for Chocolatey, Homebrew, Scoop and winget while those tools keep ownership of installation.</p>
             <p><code>jlink</code> can trim a runtime after it exists. It does not give a project a manifest, a resolver or a run command. A platform tool can provide those without changing what the JDK ships. jx is independent; it is not an official Java tool and does not speak for the platform.</p>
           </section>
 
@@ -106,7 +111,7 @@
             <p>Saying what a tool will not do is part of the design. These limits are deliberate.</p>
 
             <h3>Package management</h3>
-            <p>OS installs stay with Chocolatey, Homebrew, Scoop or the platform's installer. jx is not a package manager.</p>
+            <p>OS installs stay with Chocolatey, Homebrew, Scoop, winget or the platform's installer. jx is not a package manager. It generates release manifests for those tools because their users expect a native install, but the managers keep their review, keys and upgrade paths.</p>
 
             <h3>Plugin ecosystems</h3>
             <p>Maven's plugin ecosystem is broad and old. jx does not match it in V1. Delegated builds call Maven or Gradle, so existing plugins run there; a plugin host is planned for later.</p>
@@ -132,20 +137,34 @@
     </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-inner">
+    <footer class="site-footer">
+    <div class="wrap footer-grid">
       <div class="footer-brand">
         <a class="footer-wordmark" href="index.html">jx</a>
         <p>A command-line tool for Java. V1 is implemented; release binaries publish from version tags.</p>
       </div>
-      <nav class="footer-nav" aria-label="Footer">
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-title">Product</p>
         <a href="vision.html">Vision</a>
         <a href="roadmap.html">Roadmap</a>
+        <a href="docs/quickstart.html">Quickstart</a>
+      </nav>
+      <nav class="footer-col" aria-label="Reference">
+        <p class="footer-title">Reference</p>
+        <a href="docs/commands.html">Commands</a>
+        <a href="docs/concepts.html">Concepts</a>
+        <a href="docs/maven-gradle.html">Maven and Gradle</a>
+      </nav>
+      <nav class="footer-col" aria-label="Project">
+        <p class="footer-title">Project</p>
+        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
         <a href="privacy.html">Privacy</a>
         <a href="accessibility.html">Accessibility</a>
-        <a href="https://github.com/kael-tombo/Jx">GitHub</a>
       </nav>
+    </div>
+    <div class="wrap footer-base">
       <p class="footer-legal">Licence: Apache-2.0 OR MIT. Java is a trademark of Oracle and/or its affiliates. jx is an independent project and is not affiliated with or endorsed by Oracle or the OpenJDK project.</p>
+      <p class="footer-meta">V1 implemented · release pending</p>
     </div>
   </footer>
 </body>

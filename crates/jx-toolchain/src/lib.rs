@@ -15,6 +15,6 @@ pub mod provider;
 pub mod store;
 
 pub use store::{
-    DEFAULT_FEATURE, InstalledJdk, default_home, ensure_jdk, installed_for_feature, jdks_dir,
-    list_installed, remove_installed,
+    DEFAULT_FEATURE, InstalledJdk, cached_archive, default_home, ensure_jdk, ensure_jdk_release,
+    installed_exact, installed_for_feature, jdks_dir, list_installed, remove_installed,
 };

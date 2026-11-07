@@ -278,6 +278,39 @@ pub fn discover_main(classes_dir: &Path) -> Result<Vec<String>, JxError> {
     Ok(found)
 }
 
+/// The `target/classes` file for a fully qualified class name, when the name
+/// maps to a path below `classes_dir`. Names that escape the directory do
+/// not map, so a bad `[run] main` fails before the JVM reports it.
+pub fn class_file_path(classes_dir: &Path, class_name: &str) -> Option<PathBuf> {
+    if class_name.is_empty() {
+        return None;
+    }
+    let mut path = classes_dir.to_path_buf();
+    for segment in class_name.split('.') {
+        if segment.is_empty()
+            || segment == "."
+            || segment == ".."
+            || segment.contains('/')
+            || segment.contains('\\')
+            || segment.contains('\0')
+        {
+            return None;
+        }
+        path.push(segment);
+    }
+    path.set_extension("class");
+    if path.starts_with(classes_dir) {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// Whether `[run] main` names a class file the last build actually produced.
+pub fn compiled_class_exists(classes_dir: &Path, class_name: &str) -> bool {
+    class_file_path(classes_dir, class_name).is_some_and(|path| path.is_file())
+}
+
 /// Names the main class for a run: pinned in the manifest, else discovered.
 /// One candidate wins; several fail loudly listing them (principle 6).
 pub fn decide_main(classes_dir: &Path, pinned: Option<&String>) -> Result<String, JxError> {
@@ -416,5 +449,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let e = decide_main(&dir.path().join("nope"), None).unwrap_err();
         assert!(e.message.contains("no main class found"));
+    }
+
+    #[test]
+    fn class_names_map_below_the_classes_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let classes = dir.path().join("classes");
+        write_class(&classes, "app/Verticle.class", b"verticle-bytes");
+        assert!(compiled_class_exists(&classes, "app.Verticle"));
+        assert!(!compiled_class_exists(&classes, "app.Missing"));
+        for bad in ["", "app..Verticle", "app/../Escape", "app\\Escape"] {
+            assert!(!compiled_class_exists(&classes, bad), "{bad}");
+        }
     }
 }

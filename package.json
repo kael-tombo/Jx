@@ -19,6 +19,8 @@
     "check:production": "npm run check && node scripts/check-todos.mjs --production",
     "spellcheck": "cspell --no-progress \"public/**/*.html\"",
     "test": "playwright test",
+    "test:packages": "node --test scripts/render-packages.test.mjs",
+    "validate:packages": "node scripts/validate-packages.mjs",
     "lighthouse": "lhci autorun",
     "og": "node scripts/make-og.mjs"
   },

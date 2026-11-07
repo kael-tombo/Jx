@@ -69,9 +69,16 @@ interpolation that is not a known literal, `project(...)`, `files(...)`,
 SNAPSHOTs, `if`/`for`/`while` around dependency declarations, `allprojects`
 or `subprojects` dependency blocks, and a `mainClass` that is not a literal.
 
+Java annotation processors declared with `annotationProcessor` or
+`testAnnotationProcessor` and a literal version are imported into
+`[processors]`; jx runs them on `javac -processorpath` for main and test
+compilation, so one coordinate declared for both is written once.
+
 Non-fatal approximations are counted and printed: plugins (never migrated),
 Gradle repositories (jx trusts `config.toml`), the `buildscript` classpath,
-annotation processors (jx does not run them yet), unknown configurations,
+annotation processors that cannot be read statically (`kapt`, `ksp`, a
+processor with no literal version — add those to `[processors]` by hand),
+unknown configurations,
 dependency configuration blocks (excludes/transitive flags), runtime and
 compileOnly scope widening, and multi-module settings.
 

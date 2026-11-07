@@ -175,6 +175,21 @@ impl FakeRepo {
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(std::time::Duration::from_millis(2));
                     }
+                    // A client can abandon a connection before `accept`
+                    // returns it. Windows reports that as a reset; treating
+                    // it as fatal would stop the whole fake repository while
+                    // the test is still using it.
+                    Err(ref e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::ConnectionAborted
+                                | std::io::ErrorKind::ConnectionReset
+                                | std::io::ErrorKind::Interrupted
+                                | std::io::ErrorKind::TimedOut
+                        ) =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(2));
+                    }
                     Err(_) => return,
                 }
             }
@@ -214,6 +229,14 @@ impl Drop for FakeRepo {
 
 /// Answer one request, then close.
 fn serve(mut stream: TcpStream, table: Arc<SpecTable>) {
+    // Windows makes an accepted socket inherit the listener's non-blocking
+    // mode, so the first read below would return `WouldBlock` before the
+    // client's request arrived and `serve` would drop the connection — the
+    // client sees a reset instead of a response. The listener is non-blocking
+    // so `Drop` can join the accept loop; the connection must be blocking.
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
     // Request line, then headers up to the blank line, byte-at-a-time to
     // keep the framing trivial; requests are tiny by construction.
@@ -272,7 +295,10 @@ fn serve(mut stream: TcpStream, table: Arc<SpecTable>) {
     };
     let _ = stream.write_all(&response);
     let _ = stream.flush();
-    let _ = stream.shutdown(std::net::Shutdown::Both);
+    // `Shutdown::Both` can turn into an RST on Windows when the client has
+    // not read the response yet. Finish the write side only and let the drop
+    // close the read side after the bytes have drained.
+    let _ = stream.shutdown(std::net::Shutdown::Write);
 }
 
 /// The response bytes for one (ungated) spec; `None` only for 404 specs.

@@ -23,6 +23,7 @@ pub struct ImportedManifest {
     pub notes: Vec<String>,
     pub dependencies: usize,
     pub dev_dependencies: usize,
+    pub processors: usize,
     /// Whether versions came from the POM's own compiler settings.
     pub jdk_source: Option<String>,
 }
@@ -37,6 +38,39 @@ pub(crate) struct ImportedDependency {
 
 pub mod delegate;
 pub mod gradle;
+pub mod jbang;
+pub mod jot;
+
+/// Framework marker groups in precedence order: the first group present in
+/// the imported main dependencies or annotation processors wins, and the
+/// note names it. Full-stack platforms come first because a module mixing
+/// (say) Boot and Vert.x is a Boot app that embeds a library. Test-only
+/// dependencies never trigger detection: a test utility such as a Vert.x
+/// JUnit helper must not turn a plain library into a framework app.
+/// `jakarta.platform` alone marks Jakarta EE; narrower `jakarta.*` groups
+/// (servlet, inject, persistence) are plain dependencies any app may use.
+const FRAMEWORK_MARKERS: [(&str, &str); 6] = [
+    ("org.springframework.boot", "spring-boot"),
+    ("io.quarkus", "quarkus"),
+    ("io.micronaut", "micronaut"),
+    ("io.vertx", "vertx"),
+    ("org.openjfx", "javafx"),
+    ("jakarta.platform", "jakarta-ee"),
+];
+
+/// The `[package] framework` value an import should set, from the groups of
+/// the imported main dependencies and annotation processors. Returns the
+/// framework value and the marker group that selected it.
+pub(crate) fn detect_framework<'a>(
+    groups: impl IntoIterator<Item = &'a str>,
+) -> Option<(&'static str, &'static str)> {
+    let groups: Vec<&str> = groups.into_iter().collect();
+    FRAMEWORK_MARKERS
+        .iter()
+        .find(|(marker, _)| groups.contains(marker))
+        .copied()
+        .map(|(group, framework)| (framework, group))
+}
 
 /// Convert an effective POM into a new jx manifest.
 ///
@@ -213,6 +247,61 @@ pub fn manifest_from_pom(
             "{exclusions} Maven exclusion(s) are not represented in project.toml; jx's resolver may include artifacts Maven excluded"
         ));
     }
+    // The compiler plugin's processor paths are the one plugin setting import
+    // migrates: jx runs those jars on javac's -processorpath.
+    let mut processors: Vec<ImportedDependency> = Vec::new();
+    for dep in &pom.annotation_processor_paths {
+        check_ident("annotation processor groupId", &dep.group_id, source)?;
+        check_ident("annotation processor artifactId", &dep.artifact_id, source)?;
+        if let Some(classifier) = &dep.classifier {
+            check_ident("annotation processor classifier", classifier, source)?;
+        }
+        if dep.version.as_deref().is_none_or(|v| v.trim().is_empty()) {
+            return Err(JxError::new(
+                Kind::Resolve,
+                format!(
+                    "the compiler plugin's annotationProcessorPaths entry {}:{} has no version",
+                    dep.group_id, dep.artifact_id
+                ),
+            )
+            .at(source.to_string())
+            .hint(
+                "give every <path> an explicit <version>; jx pins annotation processors exactly",
+            ));
+        }
+        let version = dependency_version(dep, source)?;
+        if processors.iter().any(|existing| {
+            existing.group_id == dep.group_id && existing.artifact_id == dep.artifact_id
+        }) {
+            return Err(JxError::new(
+                Kind::Resolve,
+                format!(
+                    "{}:{} is listed twice in the compiler plugin's annotationProcessorPaths",
+                    dep.group_id, dep.artifact_id
+                ),
+            )
+            .at(source.to_string())
+            .hint("project.toml allows one [processors] entry per group:artifact; keep one"));
+        }
+        processors.push(ImportedDependency {
+            group_id: dep.group_id.clone(),
+            artifact_id: dep.artifact_id.clone(),
+            version,
+            classifier: dep.classifier.clone(),
+        });
+    }
+    if !processors.is_empty() {
+        notes.push(format!(
+            "{} annotation processor(s) from maven-compiler-plugin's <annotationProcessorPaths> imported into [processors]; jx pins each one exactly and runs it through javac -processorpath",
+            processors.len()
+        ));
+    }
+    if !pom.annotation_processors.is_empty() {
+        notes.push(format!(
+            "the compiler plugin's <annotationProcessors> narrows the set to {}; jx runs every processor on the processor path, so remove an unwanted jar from [processors] instead",
+            pom.annotation_processors.join(", ")
+        ));
+    }
     if !dev.is_empty() {
         notes.push(
             "test dependencies were imported, but `jx test` runs JUnit 5 through the JUnit Platform console standalone; if the POM does not declare it, add it with `jx add --dev org.junit.platform:junit-platform-console-standalone`"
@@ -257,19 +346,33 @@ pub fn manifest_from_pom(
             .to_string(),
     );
 
-    let text = render(
-        &pom.coords.artifact_id,
-        &pom.coords.version,
-        jdk,
-        &main,
-        &dev,
-        source,
+    let framework = detect_framework(
+        main.iter()
+            .chain(&processors)
+            .map(|dep| dep.group_id.as_str()),
     );
+    if let Some((value, group)) = framework {
+        notes.push(format!(
+            "detected framework = \"{value}\" from the {group} group; remove [package] framework if this module is a plain jar"
+        ));
+    }
+    let text = render(&RenderRequest {
+        name: &pom.coords.artifact_id,
+        version: &pom.coords.version,
+        jdk,
+        framework: framework.map(|(value, _)| value),
+        main_class: None,
+        main: &main,
+        dev: &dev,
+        processors: &processors,
+        source,
+    });
     Ok(ImportedManifest {
         text,
         notes,
         dependencies: main.len(),
         dev_dependencies: dev.len(),
+        processors: processors.len(),
         jdk_source,
     })
 }
@@ -416,14 +519,31 @@ fn check_ident(what: &str, value: &str, source: &str) -> Result<(), JxError> {
     Ok(())
 }
 
-pub(crate) fn render(
-    name: &str,
-    version: &str,
-    jdk: u32,
-    main: &[ImportedDependency],
-    dev: &[ImportedDependency],
-    source: &str,
-) -> String {
+#[derive(Clone, Copy)]
+pub(crate) struct RenderRequest<'a> {
+    pub name: &'a str,
+    pub version: &'a str,
+    pub jdk: u32,
+    pub framework: Option<&'a str>,
+    pub main_class: Option<&'a str>,
+    pub main: &'a [ImportedDependency],
+    pub dev: &'a [ImportedDependency],
+    pub processors: &'a [ImportedDependency],
+    pub source: &'a str,
+}
+
+pub(crate) fn render(request: &RenderRequest<'_>) -> String {
+    let RenderRequest {
+        name,
+        version,
+        jdk,
+        framework,
+        main_class,
+        main,
+        dev,
+        processors,
+        source,
+    } = *request;
     let source = source.replace(['\r', '\n'], " ");
     let mut out = String::new();
     out.push_str("# Imported from ");
@@ -435,6 +555,10 @@ pub(crate) fn render(
     out.push_str(&format!("name = {}\n", toml_string(name)));
     out.push_str(&format!("version = {}\n", toml_string(version)));
     out.push_str(&format!("jdk = {}\n", toml_string(&jdk.to_string())));
+    if let Some(framework) = framework {
+        out.push_str("\n[package]\n");
+        out.push_str(&format!("framework = {}\n", toml_string(framework)));
+    }
 
     let mut used: HashSet<String> = HashSet::new();
     if !main.is_empty() {
@@ -448,6 +572,16 @@ pub(crate) fn render(
         for dep in dev {
             push_dependency(&mut out, dep, &mut used);
         }
+    }
+    if !processors.is_empty() {
+        out.push_str("\n[processors]\n");
+        for dep in processors {
+            push_dependency(&mut out, dep, &mut used);
+        }
+    }
+    if let Some(main_class) = main_class {
+        out.push_str("\n[run]\n");
+        out.push_str(&format!("main = {}\n", toml_string(main_class)));
     }
     out
 }
@@ -532,6 +666,8 @@ mod tests {
             dependencies,
             dependency_management: Vec::new(),
             repositories: Vec::new(),
+            annotation_processor_paths: Vec::new(),
+            annotation_processors: Vec::new(),
         }
     }
 
@@ -630,6 +766,49 @@ mod tests {
     }
 
     #[test]
+    fn compiler_plugin_processors_are_imported() {
+        let mut project = pom(Vec::new());
+        project.annotation_processor_paths = vec![
+            dep("org.projectlombok", "lombok", Some("1.18.36")),
+            dep("org.mapstruct", "mapstruct-processor", Some("1.6.3")),
+        ];
+        project.annotation_processors = vec!["LombokProcessor".into()];
+        let imported = manifest_from_pom(&project, "pom.xml", 25).unwrap();
+        assert!(imported.text.contains("[processors]"), "{}", imported.text);
+        assert!(
+            imported.text.contains("org.projectlombok:lombok:=1.18.36"),
+            "{}",
+            imported.text
+        );
+        assert!(
+            imported
+                .text
+                .contains("org.mapstruct:mapstruct-processor:=1.6.3")
+        );
+        assert_eq!(imported.processors, 2);
+        assert!(
+            imported
+                .notes
+                .iter()
+                .any(|note| note.contains("annotationProcessorPaths"))
+        );
+        assert!(
+            imported
+                .notes
+                .iter()
+                .any(|note| note.contains("annotationProcessors"))
+        );
+    }
+
+    #[test]
+    fn processor_without_a_version_is_refused() {
+        let mut project = pom(Vec::new());
+        project.annotation_processor_paths = vec![dep("org.example", "processor", None)];
+        let error = manifest_from_pom(&project, "pom.xml", 25).expect_err("no version");
+        assert!(error.message.contains("has no version"), "{error}");
+    }
+
+    #[test]
     fn duplicate_aliases_get_distinct_names() {
         let project = pom(vec![
             dep("one.example", "common", Some("1.0")),
@@ -641,6 +820,102 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn each_framework_marker_maps_to_its_manifest_value() {
+        for (group, framework) in [
+            ("org.springframework.boot", "spring-boot"),
+            ("io.quarkus", "quarkus"),
+            ("io.micronaut", "micronaut"),
+            ("io.vertx", "vertx"),
+            ("org.openjfx", "javafx"),
+            ("jakarta.platform", "jakarta-ee"),
+        ] {
+            let imported =
+                manifest_from_pom(&pom(vec![dep(group, "marker", Some("1.0"))]), "pom.xml", 25)
+                    .unwrap();
+            assert!(
+                imported
+                    .text
+                    .contains(&format!("[package]\nframework = \"{framework}\""),),
+                "{group} should select {framework}: {}",
+                imported.text
+            );
+            assert!(
+                imported
+                    .notes
+                    .iter()
+                    .any(|n| n.contains(framework) && n.contains(group)),
+                "the import notes must name the detected framework and marker"
+            );
+        }
+    }
+
+    #[test]
+    fn framework_detection_prefers_platforms_and_ignores_test_scope() {
+        let mut vertx_test = dep("io.vertx", "vertx-junit5", Some("5.0.0"));
+        vertx_test.scope = Some("test".into());
+        let project = pom(vec![
+            dep("org.springframework.boot", "spring-boot", Some("3.4.0")),
+            dep("io.vertx", "vertx-core", Some("5.0.0")),
+            vertx_test,
+        ]);
+        let imported = manifest_from_pom(&project, "pom.xml", 25).unwrap();
+        assert!(
+            imported
+                .text
+                .contains("[package]\nframework = \"spring-boot\""),
+            "{}",
+            imported.text
+        );
+
+        let mut test_only = pom(vec![{
+            let mut junit = dep("io.vertx", "vertx-junit5", Some("5.0.0"));
+            junit.scope = Some("test".into());
+            junit
+        }]);
+        test_only
+            .dependencies
+            .push(dep("com.google.guava", "guava", Some("33.4.8-jre")));
+        let imported = manifest_from_pom(&test_only, "pom.xml", 25).unwrap();
+        assert!(
+            !imported.text.contains("[package]"),
+            "a test-only marker must not set a framework: {}",
+            imported.text
+        );
+    }
+
+    #[test]
+    fn narrow_jakarta_groups_are_not_jakarta_ee() {
+        for group in ["jakarta.servlet", "jakarta.inject", "jakarta.persistence"] {
+            let imported =
+                manifest_from_pom(&pom(vec![dep(group, "api", Some("2.0.0"))]), "pom.xml", 25)
+                    .unwrap();
+            assert!(
+                !imported.text.contains("[package]"),
+                "{group} is a plain dependency: {}",
+                imported.text
+            );
+        }
+    }
+
+    #[test]
+    fn annotation_processors_can_select_the_framework() {
+        let mut project = pom(vec![dep("com.google.guava", "guava", Some("33.4.8-jre"))]);
+        project.annotation_processor_paths = vec![dep(
+            "io.micronaut",
+            "micronaut-inject-java",
+            Some("4.10.36"),
+        )];
+        let imported = manifest_from_pom(&project, "pom.xml", 25).unwrap();
+        assert!(
+            imported
+                .text
+                .contains("[package]\nframework = \"micronaut\""),
+            "{}",
+            imported.text
+        );
+    }
+
     fn java_version_spellings() {
         assert_eq!(parse_java_version("8"), Some(8));
         assert_eq!(parse_java_version("1.8"), Some(8));

@@ -16,5 +16,6 @@ pub mod selection;
 
 pub use graph::{
     Conflict, Edge, OverrideApplication, Resolution, Skipped, SolvedNode, node_key, resolve,
+    resolve_processors,
 };
 pub use selection::{select_latest_stable, select_version};

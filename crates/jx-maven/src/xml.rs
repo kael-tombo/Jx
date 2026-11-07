@@ -211,8 +211,23 @@ pub struct RawRepository {
     pub snapshots_enabled: bool,
 }
 
+/// One `<build><plugins><plugin>` entry: the identity plus the compiler
+/// plugin's annotation-processor settings. Nothing else in a plugin is read:
+/// jx does not run Maven's plugin lifecycle.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RawPlugin {
+    /// `<groupId>`, `org.apache.maven.plugins` when absent.
+    pub group_id: Option<String>,
+    pub artifact_id: String,
+    /// `<configuration><annotationProcessorPaths><path>` entries, unresolved
+    /// (properties are interpolated by the effective model).
+    pub annotation_processor_paths: Vec<Dependency>,
+    /// `<configuration><annotationProcessors><processor>` class names.
+    pub annotation_processors: Vec<String>,
+}
+
 /// The parsed POM as written, before parent merging and interpolation.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RawPom {
     pub parent: Option<ParentRef>,
     /// `None` means "inherit from the parent" (a POM may omit its groupId).
@@ -228,6 +243,8 @@ pub struct RawPom {
     pub dependency_management: Vec<Dependency>,
     /// `<repositories>` plus `<pluginRepositories>` (marked for diagnostics).
     pub repositories: Vec<RawRepository>,
+    /// `<build><plugins>` entries, in document order.
+    pub plugins: Vec<RawPlugin>,
     /// `<distributionManagement><repository><url>` when present.
     pub distribution_url: Option<String>,
     /// The raw POM text, kept so the effective model can resolve properties
@@ -314,6 +331,37 @@ fn build_pom(root: &Element) -> Result<RawPom, JxError> {
         .and_then(|dm| dm.child("repository"))
         .and_then(|r| r.child_text("url"))
         .map(str::to_string);
+
+    // Only the compiler plugin's processor settings are modelled; every other
+    // plugin field stays unread so nothing pretends to run Maven's lifecycle.
+    if let Some(plugins) = project.child("build").and_then(|b| b.child("plugins")) {
+        for plugin in plugins.children("plugin") {
+            let mut entry = RawPlugin {
+                group_id: plugin.child_text("groupId").map(str::to_string),
+                artifact_id: plugin
+                    .child_text("artifactId")
+                    .map(str::to_string)
+                    .unwrap_or_default(),
+                ..RawPlugin::default()
+            };
+            if let Some(configuration) = plugin.child("configuration") {
+                if let Some(paths) = configuration.child("annotationProcessorPaths") {
+                    entry.annotation_processor_paths =
+                        paths.children("path").map(parse_dependency).collect();
+                }
+                if let Some(names) = configuration.child("annotationProcessors") {
+                    entry.annotation_processors = names
+                        .children("processor")
+                        .map(|processor| processor.text.clone())
+                        .filter(|name| !name.is_empty())
+                        .collect();
+                }
+            }
+            if !entry.artifact_id.is_empty() {
+                pom.plugins.push(entry);
+            }
+        }
+    }
 
     if pom.artifact_id.is_empty() {
         return Err(

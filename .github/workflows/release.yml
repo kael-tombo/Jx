@@ -150,3 +150,46 @@ jobs:
               --verify-tag \
               "${prerelease[@]}"
           fi
+      - name: Render package-manager manifests
+        run: node scripts/render-packages.mjs "$GITHUB_REF_NAME" dist
+      - name: Attach package-manager manifests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mapfile -d '' files < <(find dist/packaging -type f -print0)
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-manifests
+          path: dist/packaging
+          if-no-files-found: error
+          retention-days: 7
+
+  chocolatey:
+    name: chocolatey package
+    needs: publish
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-manifests
+          path: packaging
+      - name: Pack the Chocolatey package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          choco pack packaging/chocolatey/jx.nuspec --out dist
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          if (-not (Test-Path (Join-Path dist "jx.$version.nupkg"))) {
+            throw "choco pack did not produce the expected .nupkg"
+          }
+      - name: Attach the .nupkg
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          gh release upload $env:GITHUB_REF_NAME "dist/jx.$version.nupkg" --clobber --repo "$env:GITHUB_REPOSITORY"

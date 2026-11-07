@@ -47,7 +47,25 @@ fn write_local_parent_chain(root: &Path) {
   <packaging>pom</packaging>
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
+    <lombok.version>1.18.36</lombok.version>
   </properties>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -138,6 +156,17 @@ fn import_uses_local_parent_management_and_writes_a_valid_manifest() {
         "provided scope is imported with a note, not dropped"
     );
     assert_eq!(manifest.dev_dependencies.len(), 1);
+    // The parent POM's compiler-plugin processor path is inherited and its
+    // ${lombok.version} property interpolated before it reaches [processors].
+    assert_eq!(manifest.processors.len(), 1);
+    assert_eq!(manifest.processors[0].artifact_id, "lombok");
+    assert_eq!(
+        manifest.processors[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("1.18.36")
+    );
     assert_eq!(manifest.dev_dependencies[0].artifact_id, "junit-jupiter");
 }
 
@@ -194,6 +223,7 @@ java {
 
 dependencies {
     implementation("com.google.guava:guava:33.4.8-jre")
+    annotationProcessor("org.example:processor:1.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
 }
 
@@ -222,6 +252,15 @@ application {
     assert_eq!(manifest.main.as_deref(), Some("com.example.Catalog"));
     assert_eq!(manifest.dependencies.len(), 1);
     assert_eq!(manifest.dev_dependencies.len(), 1);
+    assert_eq!(manifest.processors.len(), 1);
+    assert_eq!(manifest.processors[0].artifact_id, "processor");
+    assert_eq!(
+        manifest.processors[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("1.0")
+    );
     assert_eq!(
         manifest.dependencies[0]
             .wanted
@@ -249,6 +288,178 @@ dependencies {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("interpolates"), "{stderr}");
     assert!(!fixture.path().join("project.toml").exists());
+}
+
+#[test]
+fn imports_a_jot_project_and_its_version_catalog() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.path().join("jot.toml"),
+        r#"
+[project]
+name = "jot-demo"
+version = "1.2.3"
+main-class = "com.example.Main"
+layout = "maven"
+
+[toolchains]
+java = "21"
+
+[dependencies]
+guava = "com.google.guava:guava:33.4.8-jre"
+
+[test-dependencies]
+junit = { catalog = "junit" }
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.path().join("libs.versions.toml"),
+        r#"
+[versions]
+junit = "5.11.4"
+
+[libraries]
+junit = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+"#,
+    )
+    .unwrap();
+
+    let output = fixture.run(&["import"]);
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("jot.toml"), "{stdout}");
+    assert!(stdout.contains("libs.versions.toml"), "{stdout}");
+
+    let manifest = jx_manifest::parse(&fixture.path().join("project.toml"))
+        .expect("generated manifest parses");
+    assert_eq!(manifest.name, "jot-demo");
+    assert_eq!(manifest.version, "1.2.3");
+    assert_eq!(manifest.jdk, "21");
+    assert_eq!(manifest.main.as_deref(), Some("com.example.Main"));
+    assert_eq!(manifest.dependencies.len(), 1);
+    assert_eq!(manifest.dev_dependencies.len(), 1);
+    assert_eq!(
+        manifest.dev_dependencies[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("5.11.4")
+    );
+}
+
+#[test]
+fn imports_the_real_jot_java_web_sample_processors() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.path().join("jot.toml"),
+        r#"
+[project]
+name = "webserver"
+version = "0.1.0"
+main-class = "com.jot.samples.webserver.ServerMain"
+layout = "maven"
+[toolchains]
+java = "21"
+[dependencies]
+mapstruct = "org.mapstruct:mapstruct:1.6.3"
+[processors]
+mapstruct = "org.mapstruct:mapstruct-processor:1.6.3"
+[test-dependencies]
+junit = "org.junit.jupiter:junit-jupiter:5.11.0"
+"#,
+    )
+    .unwrap();
+
+    let output = fixture.run(&["import"]);
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 processors"), "{stdout}");
+
+    let manifest = jx_manifest::parse(&fixture.path().join("project.toml"))
+        .expect("generated manifest parses");
+    assert_eq!(manifest.dependencies.len(), 1);
+    assert_eq!(manifest.dev_dependencies.len(), 1);
+    assert_eq!(manifest.processors.len(), 1);
+    assert_eq!(manifest.processors[0].group_id, "org.mapstruct");
+    assert_eq!(manifest.processors[0].artifact_id, "mapstruct-processor");
+    assert_eq!(
+        manifest.processors[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("1.6.3")
+    );
+}
+
+#[test]
+fn jot_workspace_member_uses_the_root_catalog() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.path().join("jot.toml"),
+        "[workspace]\nmembers = [\"api\"]\n\n[toolchains]\njava = \"21\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.path().join("libs.versions.toml"),
+        r#"
+[versions]
+guava = "33.4.8-jre"
+
+[libraries]
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(fixture.path().join("api")).unwrap();
+    std::fs::write(
+        fixture.path().join("api/jot.toml"),
+        r#"
+[project]
+name = "api"
+version = "1.0.0"
+layout = "maven"
+
+[toolchains]
+java = "21"
+
+[dependencies]
+guava = { catalog = "guava" }
+"#,
+    )
+    .unwrap();
+
+    let output = fixture.run(&["import", "api/jot.toml"]);
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("libs.versions.toml"), "{stdout}");
+
+    let manifest = jx_manifest::parse(&fixture.path().join("project.toml"))
+        .expect("generated manifest parses");
+    assert_eq!(manifest.name, "api");
+    assert_eq!(manifest.dependencies.len(), 1);
+    assert_eq!(
+        manifest.dependencies[0]
+            .wanted
+            .as_ref()
+            .map(jx_manifest::WantedVersion::as_str),
+        Some("33.4.8-jre")
+    );
 }
 
 #[test]

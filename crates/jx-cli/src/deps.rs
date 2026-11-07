@@ -31,12 +31,16 @@ pub(crate) struct LockedJar {
 }
 
 /// The locked jars a build needs. `main` excludes artifacts reachable only
-/// through `[dev-dependencies]`; `test` contains everything.
+/// through `[dev-dependencies]`; `test` contains every app artifact;
+/// `processors` is the javac `-processorpath` (ADR 0014) and is disjoint from
+/// both classpaths except when one jar serves both roles.
 pub(crate) struct Classpaths {
     pub main: Vec<PathBuf>,
     pub main_jars: Vec<LockedJar>,
     pub test: Vec<PathBuf>,
-    /// Every locked artifact, including dev-only ones. Used by exporters that
+    /// Annotation-processor jars, including their transitive dependencies.
+    pub processors: Vec<PathBuf>,
+    /// Every app artifact, including dev-only ones. Used by exporters that
     /// must map manifest declarations to concrete versions.
     pub all_jars: Vec<LockedJar>,
     /// The JUnit Platform console standalone jar, when the project depends on it.
@@ -89,21 +93,52 @@ impl Project {
     }
 
     fn resolve(&self) -> Result<Resolution, JxError> {
+        self.resolve_tables(&self.manifest.dependencies, &self.manifest.dev_dependencies)
+    }
+
+    fn resolve_tables(
+        &self,
+        dependencies: &[DependencySpec],
+        dev_dependencies: &[DependencySpec],
+    ) -> Result<Resolution, JxError> {
         let loader = PomLoader::new(&self.client);
         jx_resolve::resolve(
             &loader,
             &self.client,
-            &self.manifest.dependencies,
-            &self.manifest.dev_dependencies,
+            dependencies,
+            dev_dependencies,
             &self.manifest.overrides,
         )
     }
+
+    /// The annotation-processor graph, resolved independently of the app
+    /// graph (ADR 0014). `[overrides]` apply to both.
+    fn resolve_processors(&self) -> Result<Resolution, JxError> {
+        self.resolve_processor_table(&self.manifest.processors)
+    }
+
+    fn resolve_processor_table(
+        &self,
+        processors: &[DependencySpec],
+    ) -> Result<Resolution, JxError> {
+        let loader = PomLoader::new(&self.client);
+        jx_resolve::resolve_processors(&loader, &self.client, processors, &self.manifest.overrides)
+    }
+}
+
+/// One artifact whose concrete version appears, disappears or moves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockChange {
+    key: String,
+    from: Option<String>,
+    to: Option<String>,
 }
 
 /// What a lock write did, for the command's summary line.
 struct LockReport {
     artifacts: usize,
     changed: bool,
+    changes: Vec<LockChange>,
 }
 
 /// `jx lock`: resolve and write the lockfile, fetching artifact bytes to
@@ -113,6 +148,329 @@ pub fn lock(cli: &Cli) -> Result<(), JxError> {
     let report = write_lock(cli, &project)?;
     print_lock_summary(&project, &report);
     Ok(())
+}
+
+/// `jx update`: re-resolve wanted prefixes and write jx.lock, reporting the
+/// version transitions. With a direct dependency, every other direct root is
+/// pinned to its locked version so one update does not refresh the rest of
+/// the manifest.
+pub fn update(cli: &Cli, dependency: Option<&str>) -> Result<(), JxError> {
+    if cli.locked {
+        return Err(
+            JxError::new(Kind::Lock, "--locked: jx update always writes jx.lock")
+                .hint("drop --locked; `jx lock --locked` verifies without changing it"),
+        );
+    }
+    let project = Project::open(cli, "jx update")?;
+    let existing = read_optional_lock(&project)?;
+    let roots = update_roots(&project, dependency, existing.as_ref())?;
+    let resolution = project.resolve_tables(&roots.dependencies, &roots.dev_dependencies)?;
+    let processors = project.resolve_processor_table(&roots.processors)?;
+    let report = write_resolution(cli, &project, &resolution, &processors)?;
+    print_update_summary(&project, &report);
+    Ok(())
+}
+
+/// The manifest roots a selective update resolves. Targets are identified by
+/// table and index so an alias can never accidentally match another table.
+struct UpdateRoots {
+    dependencies: Vec<DependencySpec>,
+    dev_dependencies: Vec<DependencySpec>,
+    processors: Vec<DependencySpec>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UpdateTarget {
+    table: DepTable,
+    index: usize,
+}
+
+fn update_roots(
+    project: &Project,
+    dependency: Option<&str>,
+    existing: Option<&Lockfile>,
+) -> Result<UpdateRoots, JxError> {
+    let Some(target_name) = dependency else {
+        return Ok(UpdateRoots {
+            dependencies: project.manifest.dependencies.clone(),
+            dev_dependencies: project.manifest.dev_dependencies.clone(),
+            processors: project.manifest.processors.clone(),
+        });
+    };
+    let lock = existing.ok_or_else(|| {
+        JxError::new(
+            Kind::Lock,
+            "jx update with a direct dependency needs an existing jx.lock",
+        )
+        .at("jx.lock")
+        .hint("run `jx lock` first, or run `jx update` without a dependency")
+    })?;
+    let target = locate_update_target(project, target_name)?;
+    let target_spec = specs_for(project, target.table)
+        .get(target.index)
+        .expect("target index came from this table");
+    validate_update_target(target_spec, target.table)?;
+
+    Ok(UpdateRoots {
+        dependencies: pin_update_table(
+            &project.manifest.dependencies,
+            DepTable::Dependencies,
+            (target.table == DepTable::Dependencies).then_some(target.index),
+            lock,
+        )?,
+        dev_dependencies: pin_update_table(
+            &project.manifest.dev_dependencies,
+            DepTable::DevDependencies,
+            (target.table == DepTable::DevDependencies).then_some(target.index),
+            lock,
+        )?,
+        processors: pin_update_table(
+            &project.manifest.processors,
+            DepTable::Processors,
+            (target.table == DepTable::Processors).then_some(target.index),
+            lock,
+        )?,
+    })
+}
+
+fn specs_for(project: &Project, table: DepTable) -> &[DependencySpec] {
+    match table {
+        DepTable::Dependencies => &project.manifest.dependencies,
+        DepTable::DevDependencies => &project.manifest.dev_dependencies,
+        DepTable::Processors => &project.manifest.processors,
+    }
+}
+
+/// Find one direct root by alias or `group:artifact`. Classified coordinates
+/// are intentionally not guessed: an alias is unambiguous.
+fn locate_update_target(project: &Project, target: &str) -> Result<UpdateTarget, JxError> {
+    let coordinate = if target.contains(':') {
+        let parts: Vec<&str> = target.split(':').collect();
+        if parts.len() != 2 || parts.iter().any(|part| part.is_empty()) {
+            return Err(JxError::new(
+                Kind::Usage,
+                format!("`{target}` is not a direct-dependency target"),
+            )
+            .hint("pass an alias, or `group:artifact` without a version or classifier"));
+        }
+        Some((parts[0], parts[1]))
+    } else {
+        if target.trim().is_empty() {
+            return Err(
+                JxError::new(Kind::Usage, "the update target cannot be empty")
+                    .hint("pass an alias or `group:artifact`, or omit it to update every prefix"),
+            );
+        }
+        None
+    };
+
+    let mut matches = Vec::new();
+    for table in [
+        DepTable::Dependencies,
+        DepTable::DevDependencies,
+        DepTable::Processors,
+    ] {
+        for (index, spec) in specs_for(project, table).iter().enumerate() {
+            let hit = match coordinate {
+                Some((group_id, artifact_id)) => {
+                    spec.group_id == group_id
+                        && spec.artifact_id == artifact_id
+                        && spec.classifier.is_none()
+                }
+                None => spec.alias == target,
+            };
+            if hit {
+                matches.push(UpdateTarget { table, index });
+            }
+        }
+    }
+    match matches.as_slice() {
+        [] => Err(JxError::new(
+            Kind::Usage,
+            format!("`{target}` is not a direct dependency in project.toml"),
+        )
+        .hint("`jx tree` lists the declared graph; pass an alias or `group:artifact`")),
+        [target] => Ok(*target),
+        _ => Err(JxError::new(
+            Kind::Usage,
+            format!("`{target}` matches more than one direct dependency"),
+        )
+        .hint("use an alias unique across [dependencies], [dev-dependencies] and [processors]")),
+    }
+}
+
+fn validate_update_target(spec: &DependencySpec, table: DepTable) -> Result<(), JxError> {
+    if spec.platform {
+        return Err(JxError::new(
+            Kind::Manifest,
+            format!("`{}` is a platform BOM, not an updateable direct artifact", spec.alias),
+        )
+        .at(format!("[{}]", table.name()))
+        .hint("run `jx update` without a dependency to refresh every prefix, or change the BOM version by hand"));
+    }
+    match &spec.wanted {
+        Some(WantedVersion::Prefix(_)) => Ok(()),
+        Some(WantedVersion::Exact(version)) => Err(JxError::new(
+            Kind::Manifest,
+            format!("`{}` is pinned exactly (`={version}`)", spec.alias),
+        )
+        .at(format!("[{}]", table.name()))
+        .hint("change it to a prefix, or edit the exact version by hand")),
+        None => Err(JxError::new(
+            Kind::Manifest,
+            format!(
+                "`{}` has no manifest version; a platform BOM supplies it",
+                spec.alias
+            ),
+        )
+        .at(format!("[{}]", table.name()))
+        .hint("update the BOM itself, or run `jx update` without a dependency")),
+    }
+}
+
+/// Keep exact pins and exact platform entries as written; pin every other
+/// direct root to its current locked version. That is what makes a selected
+/// update selective at the manifest level.
+fn pin_update_table(
+    specs: &[DependencySpec],
+    table: DepTable,
+    target_index: Option<usize>,
+    lock: &Lockfile,
+) -> Result<Vec<DependencySpec>, JxError> {
+    let mut roots = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate() {
+        if target_index == Some(index) {
+            roots.push(spec.clone());
+            continue;
+        }
+        if spec.platform {
+            if matches!(spec.wanted.as_ref(), Some(WantedVersion::Prefix(_))) {
+                return Err(JxError::new(
+                    Kind::Manifest,
+                    format!(
+                        "cannot preserve the platform prefix for `{}` during a selective update",
+                        spec.alias
+                    ),
+                )
+                .at(format!("[{}]", table.name()))
+                .hint("pin that platform entry exactly and update it by hand, or run `jx update` without a dependency"));
+            }
+            roots.push(spec.clone());
+            continue;
+        }
+        if spec.wanted.as_ref().is_some_and(WantedVersion::is_exact) {
+            roots.push(spec.clone());
+            continue;
+        }
+        let pinned = lock
+            .find(&spec.group_id, &spec.artifact_id, spec.classifier.as_deref())
+            .ok_or_else(|| {
+                JxError::new(
+                    Kind::Lock,
+                    format!(
+                        "no locked version for `{}` ({}:{}); selective update needs a complete jx.lock",
+                        spec.alias, spec.group_id, spec.artifact_id
+                    ),
+                )
+                .hint("run `jx lock` first, or run `jx update` without a dependency")
+            })?;
+        let mut pinned_spec = spec.clone();
+        pinned_spec.wanted = Some(WantedVersion::Exact(pinned.version.clone()));
+        roots.push(pinned_spec);
+    }
+    Ok(roots)
+}
+
+fn read_optional_lock(project: &Project) -> Result<Option<Lockfile>, JxError> {
+    let path = project.lock_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    jx_lock::read(&path).map(Some)
+}
+
+fn lock_changes(old: Option<&Lockfile>, new: &Lockfile) -> Vec<LockChange> {
+    let mut changes = Vec::new();
+    if let Some(old) = old {
+        for artifact in &old.artifacts {
+            let key = artifact.key();
+            match new.find(
+                &artifact.group_id,
+                &artifact.artifact_id,
+                artifact.classifier.as_deref(),
+            ) {
+                Some(replacement) if replacement.version != artifact.version => {
+                    changes.push(LockChange {
+                        key,
+                        from: Some(artifact.version.clone()),
+                        to: Some(replacement.version.clone()),
+                    });
+                }
+                Some(_) => {}
+                None => changes.push(LockChange {
+                    key,
+                    from: Some(artifact.version.clone()),
+                    to: None,
+                }),
+            }
+        }
+    }
+    for artifact in &new.artifacts {
+        let absent = old.is_none_or(|old| {
+            old.find(
+                &artifact.group_id,
+                &artifact.artifact_id,
+                artifact.classifier.as_deref(),
+            )
+            .is_none()
+        });
+        if absent {
+            changes.push(LockChange {
+                key: artifact.key(),
+                from: None,
+                to: Some(artifact.version.clone()),
+            });
+        }
+    }
+    changes.sort_by(|a, b| a.key.cmp(&b.key));
+    changes
+}
+
+fn print_update_summary(project: &Project, report: &LockReport) {
+    let artifacts = format!(
+        "{} artifact{}",
+        report.artifacts,
+        if report.artifacts == 1 { "" } else { "s" }
+    );
+    if report.changes.is_empty() {
+        if report.changed {
+            println!("jx update: jx.lock metadata refreshed ({artifacts})");
+        } else {
+            println!("jx update: no version changes ({artifacts})");
+        }
+        return;
+    }
+    println!(
+        "jx update: {} version change{} ({artifacts})",
+        report.changes.len(),
+        if report.changes.len() == 1 { "" } else { "s" }
+    );
+    for change in &report.changes {
+        match (&change.from, &change.to) {
+            (Some(from), Some(to)) => println!("  {} {from} -> {to}", change.key),
+            (Some(from), None) => println!("  {} removed ({from})", change.key),
+            (None, Some(to)) => println!("  {} added ({to})", change.key),
+            (None, None) => {}
+        }
+    }
+    if report.changed {
+        println!(
+            "jx.lock: {artifacts} written to {}",
+            project.lock_path().display()
+        );
+    } else {
+        println!("jx.lock: up to date ({artifacts})");
+    }
 }
 
 /// `jx fetch`: download exactly what the lockfile pins, verifying every
@@ -137,21 +495,132 @@ pub fn tree(cli: &Cli) -> Result<(), JxError> {
     let project = Project::open(cli, "jx tree")?;
     let resolution = project.resolve()?;
     print_tree(&resolution, cli.verbose);
+    if !project.manifest.processors.is_empty() {
+        let processors = project.resolve_processors()?;
+        println!();
+        println!("annotation processors:");
+        print_tree(&processors, cli.verbose);
+    }
     Ok(())
 }
 
-/// `jx why <group:artifact[:version]>`: one path from a manifest root.
+/// `jx why <group:artifact[:version]>`: one path from a manifest root, in
+/// the app graph and, when declared, the annotation-processor graph.
 pub fn why(cli: &Cli, coord: &str) -> Result<(), JxError> {
     let project = Project::open(cli, "jx why")?;
     let resolution = project.resolve()?;
+    let processor_resolution = if project.manifest.processors.is_empty() {
+        None
+    } else {
+        Some(project.resolve_processors()?)
+    };
     let (group_id, artifact_id, wanted_version) = parse_why_target(coord)?;
-    why_in(
-        &resolution,
-        &group_id,
-        &artifact_id,
-        wanted_version.as_deref(),
-    )?;
+    let wanted_version = wanted_version.as_deref();
+    let in_app = why_has(&resolution, &group_id, &artifact_id, wanted_version);
+    let in_processors = processor_resolution
+        .as_ref()
+        .is_some_and(|resolution| why_has(resolution, &group_id, &artifact_id, wanted_version));
+    if !in_app && !in_processors {
+        return Err(why_missing(
+            &resolution,
+            processor_resolution.as_ref(),
+            &group_id,
+            &artifact_id,
+            wanted_version,
+        ));
+    }
+    if in_app && in_processors {
+        println!("app graph:");
+    }
+    if in_app {
+        why_in(
+            &resolution,
+            &group_id,
+            &artifact_id,
+            wanted_version,
+            "the manifest",
+        )?;
+    }
+    if in_processors {
+        if in_app {
+            println!();
+        }
+        if let Some(processors) = &processor_resolution {
+            println!("annotation processors:");
+            why_in(
+                processors,
+                &group_id,
+                &artifact_id,
+                wanted_version,
+                "[processors]",
+            )?;
+        }
+    }
     Ok(())
+}
+
+fn why_node<'a>(
+    resolution: &'a Resolution,
+    group_id: &str,
+    artifact_id: &str,
+    wanted_version: Option<&str>,
+) -> Option<&'a SolvedNode> {
+    resolution.nodes.iter().find(|node| {
+        node.group_id == group_id
+            && node.artifact_id == artifact_id
+            && wanted_version.is_none_or(|wanted| node.version == wanted)
+    })
+}
+
+fn why_has(
+    resolution: &Resolution,
+    group_id: &str,
+    artifact_id: &str,
+    wanted_version: Option<&str>,
+) -> bool {
+    why_node(resolution, group_id, artifact_id, wanted_version).is_some()
+}
+
+fn why_missing(
+    app: &Resolution,
+    processors: Option<&Resolution>,
+    group_id: &str,
+    artifact_id: &str,
+    wanted_version: Option<&str>,
+) -> JxError {
+    let mut available: Vec<String> = Vec::new();
+    for resolution in std::iter::once(app).chain(processors) {
+        for node in &resolution.nodes {
+            if node.group_id == group_id
+                && node.artifact_id == artifact_id
+                && !available.iter().any(|version| version == &node.version)
+            {
+                available.push(node.version.clone());
+            }
+        }
+    }
+    let scope = if processors.is_some() {
+        "the app or annotation-processor graph"
+    } else {
+        "the resolved graph"
+    };
+    let message = if available.is_empty() {
+        format!("{group_id}:{artifact_id} is not in {scope}")
+    } else {
+        format!(
+            "{group_id}:{artifact_id} resolves to {}, not {}",
+            available.join(", "),
+            wanted_version.unwrap_or("")
+        )
+    };
+    let hint = if processors.is_some() {
+        "`jx tree` shows the app graph and the annotation-processor section"
+    } else {
+        "`jx tree` shows every resolved artifact and where it entered"
+    };
+    JxError::new(Kind::Resolve, message)
+        .at(format!("{group_id}:{artifact_id}"))
+        .hint(hint)
 }
 
 /// `jx add`: append a validated dependency, then resolve and lock. Any
@@ -161,6 +630,7 @@ pub fn add(
     dependency: &str,
     dev: bool,
     platform: bool,
+    processor: bool,
     alias: Option<String>,
 ) -> Result<(), JxError> {
     if cli.locked {
@@ -170,8 +640,15 @@ pub fn add(
         )
         .hint("drop --locked for this edit, or update project.toml by hand"));
     }
+    if processor && (dev || platform) {
+        return Err(JxError::new(
+            Kind::Usage,
+            "--processor cannot be combined with --dev or --platform",
+        )
+        .hint("a processor is a build-time jar; it goes to [processors] on its own"));
+    }
     let mut project = Project::open(cli, "jx add")?;
-    let table = table_of(dev);
+    let table = table_of(dev, processor);
 
     // Parse under a temporary empty alias first: the artifact id is the
     // default alias, and the coordinate rules stay in one place.
@@ -225,7 +702,7 @@ pub fn add(
 
 /// `jx remove`: delete one entry, then resolve and lock. Like `add`, a
 /// failure restores the manifest.
-pub fn remove(cli: &Cli, alias: &str, dev: bool) -> Result<(), JxError> {
+pub fn remove(cli: &Cli, alias: &str, dev: bool, processor: bool) -> Result<(), JxError> {
     if cli.locked {
         return Err(JxError::new(
             Kind::Lock,
@@ -233,27 +710,35 @@ pub fn remove(cli: &Cli, alias: &str, dev: bool) -> Result<(), JxError> {
         )
         .hint("drop --locked for this edit, or update project.toml by hand"));
     }
+    if processor && dev {
+        return Err(
+            JxError::new(Kind::Usage, "--processor cannot be combined with --dev")
+                .hint("[processors] and [dev-dependencies] are separate tables"),
+        );
+    }
     let mut project = Project::open(cli, "jx remove")?;
-    let table = table_of(dev);
-    let other = if dev {
-        DepTable::Dependencies
-    } else {
-        DepTable::DevDependencies
-    };
-    if !manifest::has_alias(&project.manifest_path, table, alias)?
-        && manifest::has_alias(&project.manifest_path, other, alias)?
-    {
-        return Err(JxError::new(
-            Kind::Manifest,
-            format!(
-                "`{alias}` is declared in [{}], not [{}]",
-                other.name(),
-                table.name()
-            ),
-        )
-        .hint(format!(
-            "run `jx remove {alias} --dev` to target that table"
-        )));
+    let table = table_of(dev, processor);
+    if !manifest::has_alias(&project.manifest_path, table, alias)? {
+        for other in [
+            DepTable::Dependencies,
+            DepTable::DevDependencies,
+            DepTable::Processors,
+        ] {
+            if other != table && manifest::has_alias(&project.manifest_path, other, alias)? {
+                return Err(JxError::new(
+                    Kind::Manifest,
+                    format!(
+                        "`{alias}` is declared in [{}], not [{}]",
+                        other.name(),
+                        table.name()
+                    ),
+                )
+                .hint(format!(
+                    "run `jx remove {alias}{}` to target that table",
+                    table_flag(other)
+                )));
+            }
+        }
     }
 
     let original = read_manifest(&project.manifest_path)?;
@@ -273,11 +758,19 @@ pub fn remove(cli: &Cli, alias: &str, dev: bool) -> Result<(), JxError> {
     }
 }
 
-fn table_of(dev: bool) -> DepTable {
-    if dev {
-        DepTable::DevDependencies
-    } else {
-        DepTable::Dependencies
+fn table_of(dev: bool, processor: bool) -> DepTable {
+    match (dev, processor) {
+        (_, true) => DepTable::Processors,
+        (true, false) => DepTable::DevDependencies,
+        (false, false) => DepTable::Dependencies,
+    }
+}
+
+fn table_flag(table: DepTable) -> &'static str {
+    match table {
+        DepTable::Dependencies => "",
+        DepTable::DevDependencies => " --dev",
+        DepTable::Processors => " --processor",
     }
 }
 
@@ -297,6 +790,7 @@ fn existing_coordinate<'a>(
         .dependencies
         .iter()
         .chain(manifest.dev_dependencies.iter())
+        .chain(manifest.processors.iter())
         .find(|existing| {
             existing.group_id == spec.group_id
                 && existing.artifact_id == spec.artifact_id
@@ -361,6 +855,7 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
     let project = Project::open(cli, "jx build")?;
     let declared = !project.manifest.dependencies.is_empty()
         || !project.manifest.dev_dependencies.is_empty()
+        || !project.manifest.processors.is_empty()
         || !project.manifest.overrides.is_empty();
     let lock_path = project.lock_path();
     if !lock_path.exists() {
@@ -369,6 +864,7 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
                 main: Vec::new(),
                 main_jars: Vec::new(),
                 test: Vec::new(),
+                processors: Vec::new(),
                 all_jars: Vec::new(),
                 junit_launcher: None,
                 junit_launcher_version: None,
@@ -407,14 +903,16 @@ pub(crate) fn classpaths(cli: &Cli) -> Result<Classpaths, JxError> {
     classpaths_from_lock(&lock, &project.home)
 }
 
-/// Turn a verified lock into the two classpaths a build uses. Main artifacts
+/// Turn a verified lock into the classpaths a build uses. App artifacts
 /// reach javac and `java`; dev-only artifacts and the JUnit launcher stay on
-/// the test side.
+/// the test side; processor-only artifacts reach javac's `-processorpath`
+/// and nothing else (ADR 0014).
 fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxError> {
     let cache = jx_common::cache::Cache::new(home);
     let mut main = Vec::new();
     let mut main_jars = Vec::new();
     let mut test = Vec::new();
+    let mut processors = Vec::new();
     let mut all_jars = Vec::new();
     let mut junit_launcher = None;
     let mut junit_launcher_version = None;
@@ -427,21 +925,27 @@ fn classpaths_from_lock(lock: &Lockfile, home: &Path) -> Result<Classpaths, JxEr
             classifier: artifact.classifier.clone(),
             path: path.clone(),
         };
-        all_jars.push(jar.clone());
-        if !artifact.dev {
-            main.push(path.clone());
-            main_jars.push(jar);
+        if artifact.app {
+            all_jars.push(jar.clone());
+            if !artifact.dev {
+                main.push(path.clone());
+                main_jars.push(jar);
+            }
+            if artifact.artifact_id == "junit-platform-console-standalone" {
+                junit_launcher = Some(path.clone());
+                junit_launcher_version = Some(artifact.version.clone());
+            }
+            test.push(path.clone());
         }
-        if artifact.artifact_id == "junit-platform-console-standalone" {
-            junit_launcher = Some(path.clone());
-            junit_launcher_version = Some(artifact.version.clone());
+        if artifact.processor {
+            processors.push(path);
         }
-        test.push(path);
     }
     Ok(Classpaths {
         main,
         main_jars,
         test,
+        processors,
         all_jars,
         junit_launcher,
         junit_launcher_version,
@@ -465,9 +969,21 @@ fn manifest_is_newer(project: &Project) -> bool {
 
 fn write_lock(cli: &Cli, project: &Project) -> Result<LockReport, JxError> {
     let resolution = project.resolve()?;
-    report_conflicts(&resolution);
-    let lock = build_lock(project, &resolution)?;
+    let processors = project.resolve_processors()?;
+    write_resolution(cli, project, &resolution, &processors)
+}
+
+fn write_resolution(
+    cli: &Cli,
+    project: &Project,
+    resolution: &Resolution,
+    processors: &Resolution,
+) -> Result<LockReport, JxError> {
+    report_conflicts(resolution);
+    report_conflicts(processors);
+    let lock = build_lock(project, resolution, processors)?;
     let path = project.lock_path();
+    let changes = lock_changes(read_optional_lock(project)?.as_ref(), &lock);
 
     if cli.locked {
         let existing = match jx_lock::read(&path) {
@@ -490,6 +1006,7 @@ fn write_lock(cli: &Cli, project: &Project) -> Result<LockReport, JxError> {
         return Ok(LockReport {
             artifacts: lock.artifacts.len(),
             changed: false,
+            changes,
         });
     }
 
@@ -497,39 +1014,84 @@ fn write_lock(cli: &Cli, project: &Project) -> Result<LockReport, JxError> {
     Ok(LockReport {
         artifacts: lock.artifacts.len(),
         changed,
+        changes,
     })
 }
 
 /// Resolve every node's artifact to bytes, verify it against an existing
 /// lock when the version did not change, and build the canonical lockfile.
-fn build_lock(project: &Project, resolution: &Resolution) -> Result<Lockfile, JxError> {
+fn build_lock(
+    project: &Project,
+    resolution: &Resolution,
+    processors: &Resolution,
+) -> Result<Lockfile, JxError> {
     let existing = if project.lock_path().exists() {
         Some(jx_lock::read(&project.lock_path())?)
     } else {
         None
     };
-    let mut artifacts = Vec::with_capacity(resolution.nodes.len());
+    let mut artifacts: Vec<PinnedArtifact> = resolution
+        .nodes
+        .iter()
+        .map(|node| pinned(node, node.dev, true, false))
+        .collect();
+    // The two graphs meet only here. A GA at two versions cannot be stored
+    // in one lockfile, so it is a hard error with the override that fixes
+    // it; the same version in both roles becomes one shared entry.
+    for node in &processors.nodes {
+        if let Some(other) = artifacts.iter().find(|artifact| {
+            artifact.group_id == node.group_id
+                && artifact.artifact_id == node.artifact_id
+                && artifact.version != node.version
+        }) {
+            return Err(JxError::new(
+                Kind::Lock,
+                format!(
+                    "{}:{} is {} in the app graph and {} in [processors]",
+                    node.group_id, node.artifact_id, other.version, node.version
+                ),
+            )
+            .at("jx.lock")
+            .hint(format!(
+                "one lockfile records one version per group:artifact; add `\"{}:{}\" = \"<version>\"` to [overrides] to pin both graphs, or move the processor to its own project",
+                node.group_id, node.artifact_id
+            )));
+        }
+        if let Some(shared) = artifacts.iter_mut().find(|artifact| {
+            artifact.group_id == node.group_id
+                && artifact.artifact_id == node.artifact_id
+                && artifact.classifier == node.classifier
+                && artifact.version == node.version
+        }) {
+            shared.processor = true;
+            continue;
+        }
+        artifacts.push(pinned(node, false, false, true));
+    }
+
+    // Fetch bytes for every distinct coordinate. A jar shared by both graphs
+    // was merged above, so each coordinate is walked once.
     let mut missing = Vec::new();
-    for node in &resolution.nodes {
-        let coord = coordinate(node);
+    for (index, artifact) in artifacts.iter_mut().enumerate() {
+        let coord = coordinate_of_pin(artifact);
         if project.client.is_cached(&coord.artifact_path()) {
             let outcome = project.client.fetch_cached(&coord.artifact_path())?;
-            artifacts.push(pinned(node, outcome.sha256_hex));
+            artifact.sha256 = outcome.sha256_hex;
         } else {
-            missing.push((node, coord));
+            missing.push((index, coord));
         }
     }
     if !missing.is_empty() {
         let coords: Vec<Coordinate> = missing.iter().map(|(_, coord)| coord.clone()).collect();
         let results = project.client.fetch_all(&coords);
-        for ((node, coord), result) in missing.into_iter().zip(results) {
+        for ((index, coord), result) in missing.into_iter().zip(results) {
             let outcome = result.outcome.map_err(|error| {
                 error.hint(format!(
                     "could not fetch {}; `jx lock` needs each artifact's bytes to record its sha256",
                     coord.key()
                 ))
             })?;
-            artifacts.push(pinned(node, outcome.sha256_hex));
+            artifacts[index].sha256 = outcome.sha256_hex;
         }
     }
     artifacts.sort_by(|a, b| {
@@ -564,31 +1126,56 @@ fn build_lock(project: &Project, resolution: &Resolution) -> Result<Lockfile, Jx
             }
         }
     }
+    // Adopt the newest installed JDK for the feature so the pin tracks the
+    // toolchain a build will use. Without one, keep a matching existing pin:
+    // there is no installed release to derive a checksum from.
+    let feature = project.manifest.jdk_feature()?;
+    let existing_jdk = existing.as_ref().and_then(|lock| lock.jdk.clone());
+    let jdk = match installed_jdk_pin(project, feature)? {
+        Some(pin) => Some(pin),
+        None => existing_jdk.filter(|pin| pin.feature == feature),
+    };
     Ok(Lockfile {
-        version: 2,
-        jdk: existing.and_then(|lock| lock.jdk),
+        version: 3,
+        jdk,
         artifacts,
     })
 }
 
-fn coordinate(node: &SolvedNode) -> Coordinate {
-    Coordinate {
-        group_id: node.group_id.clone(),
-        artifact_id: node.artifact_id.clone(),
-        version: node.version.clone(),
-        classifier: node.classifier.clone(),
-        extension: "jar".to_string(),
-    }
+/// The `[jdk]` entry for the newest installed JDK of `feature`, with the
+/// checksum of the archive it was installed from. `None` when no such JDK is
+/// installed or its install archive is no longer cached — the lock stays
+/// unpinned rather than claiming a toolchain that is not local.
+fn installed_jdk_pin(
+    project: &Project,
+    feature: u32,
+) -> Result<Option<jx_lock::PinnedJdk>, JxError> {
+    let Some(jdk) = jx_toolchain::installed_for_feature(&project.home, feature)? else {
+        return Ok(None);
+    };
+    let Some(archive) = jx_toolchain::cached_archive(&project.home, &jdk.version)? else {
+        return Ok(None);
+    };
+    Ok(Some(jx_lock::PinnedJdk {
+        provider: jdk.vendor,
+        feature,
+        release: jdk.version,
+        sha256: jx_toolchain::extract::sha256_file(&archive)?,
+    }))
 }
 
-fn pinned(node: &SolvedNode, sha256: String) -> PinnedArtifact {
+/// A lock entry before its bytes are fetched. The sha256 is filled by
+/// `build_lock`; an empty value never reaches the writer.
+fn pinned(node: &SolvedNode, dev: bool, app: bool, processor: bool) -> PinnedArtifact {
     PinnedArtifact {
         group_id: node.group_id.clone(),
         artifact_id: node.artifact_id.clone(),
         version: node.version.clone(),
         classifier: node.classifier.clone(),
-        sha256,
-        dev: node.dev,
+        sha256: String::new(),
+        dev,
+        app,
+        processor,
     }
 }
 
@@ -654,48 +1241,16 @@ fn coordinate_of_pin(artifact: &PinnedArtifact) -> Coordinate {
 
 fn ensure_locked_jdk(home: &Path, pin: &jx_lock::PinnedJdk, offline: bool) -> Result<(), JxError> {
     // The lock records an exact build; never silently substitute another
-    // build of the same feature release.
-    let installed = jx_toolchain::list_installed(home)?;
-    if installed
-        .iter()
-        .any(|jdk| jdk.vendor == pin.provider && jdk.version == pin.release && pin.feature > 0)
-    {
-        return Ok(());
-    }
-    if offline {
-        return Err(JxError::new(
-            Kind::Toolchain,
-            format!(
-                "jx.lock pins {} {}, which is not installed, and --offline forbids downloading",
-                pin.provider, pin.release
-            ),
-        )
-        .hint(format!("run `jx jdk install {}` once online", pin.feature)));
-    }
-    if pin.provider != "temurin" {
-        return Err(JxError::new(
-            Kind::Toolchain,
-            format!(
-                "jx.lock pins provider `{}`, which this jx does not install",
-                pin.provider
-            ),
-        )
-        .hint("V1 installs Eclipse Temurin only; change the pin deliberately"));
-    }
-    let installed = jx_toolchain::ensure_jdk(home, pin.feature)?;
-    if installed.version != pin.release {
-        return Err(JxError::new(
-            Kind::Toolchain,
-            format!(
-                "jx.lock pins temurin {}, but the provider now installs {}",
-                pin.release, installed.version
-            ),
-        )
-        .hint(
-            "exact-build installation arrives with the M8 toolchain pin work; remove the \
-             [jdk] entry or re-lock deliberately",
-        ));
-    }
+    // build of the same feature release. The store reuses an installed or
+    // cached copy and verifies the archive against the pinned sha256.
+    jx_toolchain::ensure_jdk_release(
+        home,
+        &pin.provider,
+        pin.feature,
+        &pin.release,
+        &pin.sha256,
+        offline,
+    )?;
     Ok(())
 }
 
@@ -846,35 +1401,28 @@ fn why_in(
     group_id: &str,
     artifact_id: &str,
     wanted_version: Option<&str>,
+    origin: &str,
 ) -> Result<(), JxError> {
-    let node = resolution
-        .nodes
-        .iter()
-        .find(|node| {
-            node.group_id == group_id
-                && node.artifact_id == artifact_id
-                && wanted_version.is_none_or(|wanted| node.version == wanted)
-        })
-        .ok_or_else(|| {
-            let available: Vec<String> = resolution
-                .nodes
-                .iter()
-                .filter(|node| node.group_id == group_id && node.artifact_id == artifact_id)
-                .map(|node| node.version.clone())
-                .collect();
-            let message = if available.is_empty() {
-                format!("{group_id}:{artifact_id} is not in the resolved graph")
-            } else {
-                format!(
-                    "{group_id}:{artifact_id} resolves to {}, not {}",
-                    available.join(", "),
-                    wanted_version.unwrap_or("")
-                )
-            };
-            JxError::new(Kind::Resolve, message)
-                .at(format!("{group_id}:{artifact_id}"))
-                .hint("`jx tree` shows every resolved artifact and where it entered")
-        })?;
+    let node = why_node(resolution, group_id, artifact_id, wanted_version).ok_or_else(|| {
+        let available: Vec<String> = resolution
+            .nodes
+            .iter()
+            .filter(|node| node.group_id == group_id && node.artifact_id == artifact_id)
+            .map(|node| node.version.clone())
+            .collect();
+        let message = if available.is_empty() {
+            format!("{group_id}:{artifact_id} is not in the resolved graph")
+        } else {
+            format!(
+                "{group_id}:{artifact_id} resolves to {}, not {}",
+                available.join(", "),
+                wanted_version.unwrap_or("")
+            )
+        };
+        JxError::new(Kind::Resolve, message)
+            .at(format!("{group_id}:{artifact_id}"))
+            .hint("`jx tree` shows every resolved artifact and where it entered")
+    })?;
     let target = node.key();
     let by_key: HashMap<String, &SolvedNode> = resolution
         .nodes
@@ -946,7 +1494,7 @@ fn why_in(
         );
     }
     println!(
-        "{group_id}:{artifact_id} is {} level{} from the manifest",
+        "{group_id}:{artifact_id} is {} level{} from {origin}",
         path.len(),
         if path.len() == 1 { "" } else { "s" }
     );
@@ -960,34 +1508,68 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn lock_scope_splits_main_from_test_classpaths() {
+    fn lock_scope_splits_main_test_and_processor_classpaths() {
         let dir = tempdir().unwrap();
         let cache = Cache::new(dir.path());
         let main_sha = cache.put(b"main jar").unwrap();
         let dev_sha = cache.put(b"dev jar").unwrap();
         let launcher_sha = cache.put(b"junit console").unwrap();
-        let artifact = |name: &str, sha: &str, dev: bool| PinnedArtifact {
-            group_id: "g".to_string(),
-            artifact_id: name.to_string(),
-            version: "1.0".to_string(),
-            classifier: None,
-            sha256: sha.to_string(),
-            dev,
-        };
+        let processor_sha = cache.put(b"processor jar").unwrap();
+        let shared_sha = cache.put(b"shared jar").unwrap();
+        let artifact =
+            |name: &str, sha: &str, dev: bool, app: bool, processor: bool| PinnedArtifact {
+                group_id: "g".to_string(),
+                artifact_id: name.to_string(),
+                version: "1.0".to_string(),
+                classifier: None,
+                sha256: sha.to_string(),
+                dev,
+                app,
+                processor,
+            };
         let lock = Lockfile {
-            version: 2,
+            version: 3,
             jdk: None,
             artifacts: vec![
-                artifact("main", &main_sha, false),
-                artifact("test-only", &dev_sha, true),
-                artifact("junit-platform-console-standalone", &launcher_sha, true),
+                artifact("main", &main_sha, false, true, false),
+                artifact("test-only", &dev_sha, true, true, false),
+                artifact(
+                    "junit-platform-console-standalone",
+                    &launcher_sha,
+                    true,
+                    true,
+                    false,
+                ),
+                artifact("processor-only", &processor_sha, false, false, true),
+                artifact("shared", &shared_sha, false, true, true),
             ],
         };
         let cp = classpaths_from_lock(&lock, dir.path()).unwrap();
-        assert_eq!(cp.main, vec![cache.path_of(&main_sha).unwrap()]);
-        assert_eq!(cp.main_jars.len(), 1);
+        // `shared` is a production app dependency that also happens to be a
+        // processor, so it belongs on the main path as well.
+        assert_eq!(
+            cp.main,
+            vec![
+                cache.path_of(&main_sha).unwrap(),
+                cache.path_of(&shared_sha).unwrap()
+            ]
+        );
+        assert_eq!(cp.main_jars.len(), 2);
         assert_eq!(cp.main_jars[0].artifact_id, "main");
-        assert_eq!(cp.test.len(), 3);
+        assert_eq!(cp.main_jars[1].artifact_id, "shared");
+        // The test classpath is every app artifact; processors stay out.
+        assert_eq!(cp.test.len(), 4);
+        assert!(!cp.test.contains(&cache.path_of(&processor_sha).unwrap()));
+        assert_eq!(
+            cp.processors,
+            vec![
+                cache.path_of(&processor_sha).unwrap(),
+                cache.path_of(&shared_sha).unwrap()
+            ]
+        );
+        // A jar that serves both roles is on every path it serves.
+        assert!(cp.test.contains(&cache.path_of(&shared_sha).unwrap()));
+        assert_eq!(cp.all_jars.len(), 4);
         assert_eq!(
             cp.junit_launcher,
             Some(cache.path_of(&launcher_sha).unwrap())

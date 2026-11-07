@@ -26,6 +26,9 @@ pub struct CompileRequest<'a> {
     pub resources_root: Option<&'a Path>,
     pub out: &'a Path,
     pub classpath: &'a [PathBuf],
+    /// Annotation-processor jars for javac's `-processorpath` (ADR 0014).
+    /// Empty means "no processors", not "search the classpath".
+    pub processor_path: &'a [PathBuf],
     pub cache_dir: &'a Path,
     pub label: &'a str,
     /// Compile even when the fingerprint matches (used when main sources were
@@ -43,6 +46,7 @@ pub fn compile_if_stale(request: &CompileRequest<'_>) -> Result<bool, JxError> {
         request.resources_root,
         request.out,
         request.classpath,
+        request.processor_path,
     )?;
     if !request.force
         && read_fingerprint(request.cache_dir).as_deref() == Some(hash.as_str())
@@ -57,6 +61,7 @@ pub fn compile_if_stale(request: &CompileRequest<'_>) -> Result<bool, JxError> {
         request.sources_root,
         request.out,
         request.classpath,
+        request.processor_path,
         request.cache_dir,
     )?;
     write_fingerprint(request.cache_dir, &hash)?;
@@ -76,9 +81,10 @@ pub fn command_fingerprint(
     resources_root: Option<&Path>,
     out: &Path,
     classpath: &[PathBuf],
+    processor_path: &[PathBuf],
 ) -> Result<String, JxError> {
     let mut hasher = sha2::Sha256::new();
-    feed(&mut hasher, b"jx-build-fingerprint-v2");
+    feed(&mut hasher, b"jx-build-fingerprint-v3");
     feed(&mut hasher, javac.to_string_lossy().as_bytes());
     feed(&mut hasher, &feature.to_be_bytes());
     feed(&mut hasher, out.to_string_lossy().as_bytes());
@@ -100,20 +106,23 @@ pub fn command_fingerprint(
             feed(&mut hasher, &read_bytes(&resource)?);
         }
     }
-    for entry in classpath {
-        feed(&mut hasher, entry.to_string_lossy().as_bytes());
-        match std::fs::metadata(entry) {
-            Ok(meta) => {
-                feed(&mut hasher, &meta.len().to_be_bytes());
-                let mtime = meta
-                    .modified()
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0);
-                feed(&mut hasher, &mtime.to_be_bytes());
+    for (marker, entries) in [(b"c", classpath), (b"p", processor_path)] {
+        for entry in entries {
+            feed(&mut hasher, marker);
+            feed(&mut hasher, entry.to_string_lossy().as_bytes());
+            match std::fs::metadata(entry) {
+                Ok(meta) => {
+                    feed(&mut hasher, &meta.len().to_be_bytes());
+                    let mtime = meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_nanos())
+                        .unwrap_or(0);
+                    feed(&mut hasher, &mtime.to_be_bytes());
+                }
+                Err(_) => feed(&mut hasher, b"missing"),
             }
-            Err(_) => feed(&mut hasher, b"missing"),
         }
     }
     Ok(hex::encode(hasher.finalize()))
@@ -167,6 +176,7 @@ pub fn compile(
     sources_root: &Path,
     out: &Path,
     classpath: &[PathBuf],
+    processor_path: &[PathBuf],
     args_dir: &Path,
 ) -> Result<(), JxError> {
     let sources = collect_files(sources_root, Some("java"));
@@ -199,7 +209,7 @@ pub fn compile(
             .caused_by(e)
     })?;
     let argfile = args_dir.join("javac-args.txt");
-    let args = build_argfile(feature, out, &sources, classpath);
+    let args = build_argfile(feature, out, &sources, classpath, processor_path);
     std::fs::write(&argfile, &args).map_err(|e| {
         JxError::new(Kind::Io, "cannot write the javac argument file")
             .at(argfile.display().to_string())
@@ -263,19 +273,35 @@ pub fn copy_resources(resources_root: &Path, out: &Path) -> Result<usize, JxErro
     Ok(copied)
 }
 
-fn build_argfile(feature: u32, out: &Path, sources: &[PathBuf], classpath: &[PathBuf]) -> String {
+fn build_argfile(
+    feature: u32,
+    out: &Path,
+    sources: &[PathBuf],
+    classpath: &[PathBuf],
+    processor_path: &[PathBuf],
+) -> String {
     let mut args = String::new();
     args.push_str(&format!("--release {feature}\n"));
     args.push_str("-encoding UTF-8\n");
     args.push_str(&format!("-d {}\n", quote(out.to_string_lossy())));
+    let separator = if cfg!(windows) { ";" } else { ":" };
     if !classpath.is_empty() {
-        let separator = if cfg!(windows) { ";" } else { ":" };
         let joined = classpath
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join(separator);
         args.push_str(&format!("-classpath {}\n", quote(joined)));
+    }
+    // A non-empty processor path is explicit: javac discovers processors
+    // only there, never by scanning the application classpath.
+    if !processor_path.is_empty() {
+        let joined = processor_path
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(separator);
+        args.push_str(&format!("-processorpath {}\n", quote(joined)));
     }
     for s in sources {
         args.push_str(&quote(s.to_string_lossy()));
@@ -366,22 +392,27 @@ mod tests {
     }
 
     #[test]
-    fn argfile_adds_a_classpath_only_when_present() {
+    fn argfile_adds_classpath_and_processorpath_only_when_present() {
         let out = Path::new("target/classes");
         let sources = [PathBuf::from("src/main/java/app/App.java")];
-        let plain = build_argfile(25, out, &sources, &[]);
+        let plain = build_argfile(25, out, &sources, &[], &[]);
         assert!(!plain.contains("-classpath"));
+        assert!(!plain.contains("-processorpath"));
         let jars = [
             PathBuf::from("cache/content/aa/one.jar"),
             PathBuf::from("cache/content/bb/two.jar"),
         ];
-        let with = build_argfile(25, out, &sources, &jars);
+        let with = build_argfile(25, out, &sources, &jars, &[]);
         assert!(with.contains("-classpath cache/content/aa/one.jar"));
         assert!(with.contains(if cfg!(windows) {
             "cache/content/aa/one.jar;cache/content/bb/two.jar"
         } else {
             "cache/content/aa/one.jar:cache/content/bb/two.jar"
         }));
+        let processors = [PathBuf::from("cache/content/cc/processor.jar")];
+        let processing = build_argfile(25, out, &sources, &jars, &processors);
+        assert!(processing.contains("-processorpath cache/content/cc/processor.jar"));
+        assert!(!processing.contains("-processorpath cache/content/cc/processor.jar;"));
     }
 
     #[test]
@@ -395,33 +426,55 @@ mod tests {
         let jar = dir.path().join("dep.jar");
         std::fs::write(&jar, b"jar").unwrap();
         let javac = Path::new("javac");
-        let first = command_fingerprint(javac, 25, &root, None, &out, &[]).unwrap();
+        let first = command_fingerprint(javac, 25, &root, None, &out, &[], &[]).unwrap();
         assert_eq!(
             first,
-            command_fingerprint(javac, 25, &root, None, &out, &[]).unwrap()
+            command_fingerprint(javac, 25, &root, None, &out, &[], &[]).unwrap()
         );
-        let with_jar =
-            command_fingerprint(javac, 25, &root, None, &out, std::slice::from_ref(&jar)).unwrap();
+        let with_jar = command_fingerprint(
+            javac,
+            25,
+            &root,
+            None,
+            &out,
+            std::slice::from_ref(&jar),
+            &[],
+        )
+        .unwrap();
         assert_ne!(first, with_jar);
+        // A processor jar changes the fingerprint even when the classpath
+        // does not: it changes what javac runs.
+        let with_processor = command_fingerprint(
+            javac,
+            25,
+            &root,
+            None,
+            &out,
+            &[],
+            std::slice::from_ref(&jar),
+        )
+        .unwrap();
+        assert_ne!(first, with_processor);
+        assert_ne!(with_jar, with_processor);
         std::fs::write(&source, "class App { int x; }").unwrap();
         assert_ne!(
             first,
-            command_fingerprint(javac, 25, &root, None, &out, &[]).unwrap()
+            command_fingerprint(javac, 25, &root, None, &out, &[], &[]).unwrap()
         );
         assert_ne!(
             with_jar,
-            command_fingerprint(javac, 26, &root, None, &out, &[jar]).unwrap()
+            command_fingerprint(javac, 26, &root, None, &out, &[jar], &[]).unwrap()
         );
 
         let resources = dir.path().join("src/main/resources");
         std::fs::create_dir_all(&resources).unwrap();
         std::fs::write(resources.join("app.properties"), "x=1").unwrap();
         let with_resource =
-            command_fingerprint(javac, 25, &root, Some(&resources), &out, &[]).unwrap();
+            command_fingerprint(javac, 25, &root, Some(&resources), &out, &[], &[]).unwrap();
         std::fs::write(resources.join("app.properties"), "x=2").unwrap();
         assert_ne!(
             with_resource,
-            command_fingerprint(javac, 25, &root, Some(&resources), &out, &[]).unwrap()
+            command_fingerprint(javac, 25, &root, Some(&resources), &out, &[], &[]).unwrap()
         );
     }
 
@@ -434,6 +487,7 @@ mod tests {
             25,
             &dir.path().join("src"),
             &dir.path().join("out"),
+            &[],
             &[],
             &dir.path().join("cache"),
         )

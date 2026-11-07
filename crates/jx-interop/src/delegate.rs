@@ -106,6 +106,8 @@ pub struct Request<'a> {
     pub goal: Goal,
     /// Pass the build tool's own offline flag.
     pub offline: bool,
+    /// Raw arguments after `--`, appended after the mapped goal.
+    pub extra_args: &'a [String],
 }
 
 /// A resolved invocation, ready to run once the JDK is available.
@@ -175,6 +177,7 @@ fn plan_with_path(request: &Request<'_>, path: Option<&OsStr>) -> Result<Plan, J
         }
     }
     args.push(request.goal.task(request.engine).to_string());
+    args.extend(request.extra_args.iter().cloned());
 
     Ok(Plan {
         engine: request.engine,
@@ -258,7 +261,7 @@ fn missing_tool(project_dir: &Path, engine: Engine) -> JxError {
 
 /// Find `name` in the given `PATH`. Windows needs the executable extensions
 /// `Command` would otherwise not append; Unix uses the bare name.
-fn find_in_path(name: &str, path: Option<&OsStr>) -> Option<PathBuf> {
+pub fn find_in_path(name: &str, path: Option<&OsStr>) -> Option<PathBuf> {
     let extensions: &[&str] = if cfg!(windows) {
         &[".exe", ".cmd", ".bat"]
     } else {
@@ -278,7 +281,7 @@ fn find_in_path(name: &str, path: Option<&OsStr>) -> Option<PathBuf> {
     None
 }
 
-fn path_with(java_bin: PathBuf) -> Result<OsString, JxError> {
+pub(crate) fn path_with(java_bin: PathBuf) -> Result<OsString, JxError> {
     let mut entries = vec![java_bin];
     if let Some(existing) = std::env::var_os("PATH") {
         entries.extend(std::env::split_paths(&existing));
@@ -288,14 +291,20 @@ fn path_with(java_bin: PathBuf) -> Result<OsString, JxError> {
 }
 
 fn command_for(plan: &Plan) -> Command {
-    if is_windows_batch(&plan.program) {
+    command_for_program(&plan.program, &plan.args)
+}
+
+/// Build a `Command` for a tool path. Windows `.cmd`/`.bat` wrappers need
+/// `cmd /C`, because `CreateProcess` cannot execute them directly.
+pub(crate) fn command_for_program(program: &Path, args: &[String]) -> Command {
+    if is_windows_batch(program) {
         let mut command = Command::new("cmd");
-        command.arg("/C").arg(&plan.program);
-        command.args(&plan.args);
+        command.arg("/C").arg(program);
+        command.args(args);
         command
     } else {
-        let mut command = Command::new(&plan.program);
-        command.args(&plan.args);
+        let mut command = Command::new(program);
+        command.args(args);
         command
     }
 }
@@ -327,6 +336,7 @@ mod tests {
             engine,
             goal,
             offline: false,
+            extra_args: &[],
         }
     }
 
@@ -356,6 +366,30 @@ mod tests {
         assert_eq!(
             plan.command_line(),
             "gradlew --console=plain --offline classes"
+        );
+    }
+
+    #[test]
+    fn tool_arguments_are_forwarded_after_the_mapped_goal() {
+        let dir = project();
+        write(dir.path(), "pom.xml");
+        write(dir.path(), "mvnw");
+        write(dir.path(), "build.gradle.kts");
+        write(dir.path(), "gradlew");
+
+        let maven_args = vec!["-DskipTests".to_string(), "-Pfast".to_string()];
+        let mut maven_request = request(dir.path(), Engine::Maven, Goal::Build);
+        maven_request.extra_args = &maven_args;
+        let plan = plan_with_path(&maven_request, None).expect("maven wrapper");
+        assert_eq!(plan.args, ["-B", "compile", "-DskipTests", "-Pfast"]);
+
+        let gradle_args = vec!["--tests".to_string(), "app.LibTest".to_string()];
+        let mut gradle_request = request(dir.path(), Engine::Gradle, Goal::Test);
+        gradle_request.extra_args = &gradle_args;
+        let plan = plan_with_path(&gradle_request, None).expect("gradle wrapper");
+        assert_eq!(
+            plan.args,
+            ["--console=plain", "test", "--tests", "app.LibTest"]
         );
     }
 

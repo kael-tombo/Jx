@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use jx_common::error::{JxError, Kind};
 
-use crate::{ImportedManifest, parse_java_version, push_dependency, toml_string};
+use crate::{ImportedManifest, detect_framework, parse_java_version, push_dependency, toml_string};
 
 /// One Gradle build to import.
 pub struct GradleSource {
@@ -100,7 +100,11 @@ struct Parsed {
     spring_boot: Option<String>,
     repositories: bool,
     buildscript: bool,
+    /// Declarations jx cannot import: `kapt`/`ksp`, the buildscript
+    /// classpath, and Java processors without a literal version.
     processors: usize,
+    /// Java processors with a literal version, bound for `[processors]`.
+    processor_deps: Vec<Dep>,
     compile_only: usize,
     runtime_only: usize,
     test_compile_only: usize,
@@ -131,6 +135,7 @@ pub fn manifest_from_gradle(source: &GradleSource) -> Result<ImportedManifest, J
         repositories: false,
         buildscript: false,
         processors: 0,
+        processor_deps: Vec::new(),
         compile_only: 0,
         runtime_only: 0,
         test_compile_only: 0,
@@ -322,6 +327,7 @@ pub fn manifest_from_gradle(source: &GradleSource) -> Result<ImportedManifest, J
     // A manifest table may name one group:artifact only once.
     check_duplicates(&source.script, &parsed.main)?;
     check_duplicates(&source.script, &parsed.dev)?;
+    check_duplicates(&source.script, &parsed.processor_deps)?;
     let mut dev = parsed.dev.clone();
     let before = dev.len();
     dev.retain(|dep| {
@@ -373,9 +379,15 @@ pub fn manifest_from_gradle(source: &GradleSource) -> Result<ImportedManifest, J
                 .to_string(),
         );
     }
+    if !parsed.processor_deps.is_empty() {
+        notes.push(format!(
+            "{} annotation processor(s) imported into [processors] with the declared version; jx runs them through javac -processorpath for main and test compilation",
+            parsed.processor_deps.len()
+        ));
+    }
     if parsed.processors > 0 {
         notes.push(format!(
-            "{} annotation-processor declaration(s) were skipped; jx does not run annotation processors yet",
+            "{} annotation-processor declaration(s) were not imported (kapt/ksp, the buildscript classpath, or no literal version); add them to [processors] by hand",
             parsed.processors
         ));
     }
@@ -456,23 +468,41 @@ pub fn manifest_from_gradle(source: &GradleSource) -> Result<ImportedManifest, J
             .to_string(),
     );
 
-    let text = render_gradle(
-        ManifestHeader {
+    // A Spring Boot platform entry inserted above already carries the
+    // org.springframework.boot group, so group detection covers the Boot
+    // plugin without a special case.
+    let framework = detect_framework(
+        parsed
+            .main
+            .iter()
+            .chain(&parsed.processor_deps)
+            .map(|dep| dep.group_id.as_str()),
+    );
+    if let Some((value, group)) = framework {
+        notes.push(format!(
+            "detected framework = \"{value}\" from the {group} group; remove [package] framework if this module is a plain jar"
+        ));
+    }
+    let text = render_gradle(GradleRender {
+        header: ManifestHeader {
             name: &name,
             version: &version,
             jdk,
         },
-        &parsed.main,
-        &dev,
-        &parsed.overrides,
-        parsed.main_class.as_deref(),
-        &source.script,
-    );
+        main: &parsed.main,
+        dev: &dev,
+        processors: &parsed.processor_deps,
+        overrides: &parsed.overrides,
+        main_class: parsed.main_class.as_deref(),
+        framework: framework.map(|(value, _)| value),
+        source: &source.script,
+    });
     Ok(ImportedManifest {
         text,
         notes,
         dependencies: parsed.main.iter().filter(|dep| !dep.platform).count(),
         dev_dependencies: dev.len(),
+        processors: parsed.processor_deps.len(),
         jdk_source,
     })
 }
@@ -752,9 +782,22 @@ fn parse_dependencies(
             continue;
         }
         if scope == Scope::Processor {
-            // Processors are skipped by design; do not try to read their
-            // arguments, which are often project(...) references.
-            parsed.processors += 1;
+            // Kotlin and buildscript processors stay outside jx's Java build;
+            // a Java processor is importable only with a literal version.
+            let importable = matches!(head, "annotationProcessor" | "testAnnotationProcessor");
+            let dep = importable
+                .then(|| parse_notation(source, &args, statement[0].line, &vars))
+                .and_then(Result::ok)
+                .map(Notation::into_dep)
+                .filter(|dep| dep.version.is_some() && !dep.platform);
+            match dep {
+                Some(dep) if !same_processor(&parsed.processor_deps, &dep) => {
+                    parsed.processor_deps.push(dep);
+                }
+                // The same coordinate declared for main and test compilation.
+                Some(_) => {}
+                None => parsed.processors += 1,
+            }
             continue;
         }
 
@@ -1204,6 +1247,17 @@ fn dynamic_string(source: &str, line: usize, raw: &str) -> JxError {
     )
 }
 
+/// Whether the same coordinate is already queued as a processor. Gradle
+/// commonly declares one processor for both main and test compilation.
+fn same_processor(existing: &[Dep], dep: &Dep) -> bool {
+    existing.iter().any(|other| {
+        other.group_id == dep.group_id
+            && other.artifact_id == dep.artifact_id
+            && other.classifier == dep.classifier
+            && other.version == dep.version
+    })
+}
+
 fn check_duplicates(source: &str, deps: &[Dep]) -> Result<(), JxError> {
     for (index, dep) in deps.iter().enumerate() {
         if deps[..index].iter().any(|earlier| {
@@ -1626,15 +1680,31 @@ struct ManifestHeader<'a> {
     jdk: u32,
 }
 
-fn render_gradle(
-    header: ManifestHeader<'_>,
-    main: &[Dep],
-    dev: &[Dep],
-    overrides: &[Dep],
-    main_class: Option<&str>,
-    source: &str,
-) -> String {
-    let ManifestHeader { name, version, jdk } = header;
+/// Everything `render_gradle` needs, kept in one struct so the renderer
+/// does not grow a parameter per manifest section.
+struct GradleRender<'a> {
+    header: ManifestHeader<'a>,
+    main: &'a [Dep],
+    dev: &'a [Dep],
+    processors: &'a [Dep],
+    overrides: &'a [Dep],
+    main_class: Option<&'a str>,
+    framework: Option<&'a str>,
+    source: &'a str,
+}
+
+fn render_gradle(request: GradleRender<'_>) -> String {
+    let ManifestHeader { name, version, jdk } = request.header;
+    let GradleRender {
+        main,
+        dev,
+        processors,
+        overrides,
+        main_class,
+        framework,
+        source,
+        ..
+    } = request;
     let source = source.replace(['\r', '\n'], " ");
     let mut out = String::new();
     out.push_str("# Imported from ");
@@ -1646,6 +1716,10 @@ fn render_gradle(
     out.push_str(&format!("name = {}\n", toml_string(name)));
     out.push_str(&format!("version = {}\n", toml_string(version)));
     out.push_str(&format!("jdk = {}\n", toml_string(&jdk.to_string())));
+    if let Some(framework) = framework {
+        out.push_str("\n[package]\n");
+        out.push_str(&format!("framework = {}\n", toml_string(framework)));
+    }
 
     let mut used = std::collections::HashSet::new();
     if !main.is_empty() {
@@ -1657,6 +1731,12 @@ fn render_gradle(
     if !dev.is_empty() {
         out.push_str("\n[dev-dependencies]\n");
         for dep in dev {
+            push_gradle_dependency(&mut out, dep, &mut used);
+        }
+    }
+    if !processors.is_empty() {
+        out.push_str("\n[processors]\n");
+        for dep in processors {
             push_gradle_dependency(&mut out, dep, &mut used);
         }
     }
@@ -1832,11 +1912,19 @@ tasks.test {
         );
         assert!(imported.dependencies == 4);
         assert!(imported.dev_dependencies == 1);
+        assert_eq!(imported.processors, 1);
+        assert!(
+            imported
+                .text
+                .contains("[processors]\n\"processor\" = \"org.example:processor:=1.0\"\n"),
+            "{}",
+            imported.text
+        );
         assert!(
             imported
                 .notes
                 .iter()
-                .any(|note| note.contains("annotation-processor"))
+                .any(|note| note.contains("imported into [processors]"))
         );
         assert!(
             imported
@@ -1850,6 +1938,48 @@ tasks.test {
                 .iter()
                 .any(|note| note.contains("junit-platform-console-standalone"))
         );
+    }
+
+    #[test]
+    fn annotation_processors_with_versions_are_imported() {
+        let text = r#"
+dependencies {
+    implementation("com.google.guava:guava:33.4.8-jre")
+    annotationProcessor("org.example:processor:1.0")
+    testAnnotationProcessor("org.example:processor:1.0")
+    annotationProcessor("org.example:versionless")
+    kapt("org.example:kotlin-processor:2.0")
+}
+"#;
+        let imported = manifest_from_gradle(&source(text)).expect("import");
+        assert!(
+            imported
+                .text
+                .contains("[processors]\n\"processor\" = \"org.example:processor:=1.0\"\n"),
+            "{}",
+            imported.text
+        );
+        // One coordinate declared for both compilations is written once.
+        assert_eq!(imported.processors, 1);
+        assert_eq!(imported.text.matches("org.example:processor").count(), 1);
+        assert!(
+            imported
+                .notes
+                .iter()
+                .any(|note| note.contains("imported into [processors]")),
+            "{:?}",
+            imported.notes
+        );
+        assert!(
+            imported
+                .notes
+                .iter()
+                .any(|note| note.contains("were not imported")),
+            "{:?}",
+            imported.notes
+        );
+        assert!(!imported.text.contains("versionless"));
+        assert!(!imported.text.contains("kotlin-processor"));
     }
 
     #[test]
@@ -2000,9 +2130,42 @@ dependencies {
         assert!(imported.text.contains("[dev-dependencies]"));
         assert!(
             imported
+                .text
+                .contains("[package]\nframework = \"spring-boot\""),
+            "the Boot plugin marks the module a Boot app: {}",
+            imported.text
+        );
+        assert!(
+            imported
                 .notes
                 .iter()
                 .any(|note| note.contains("Spring Boot plugin"))
+        );
+    }
+
+    #[test]
+    fn quarkus_dependency_selects_the_framework() {
+        let text = r#"
+plugins {
+    id 'java'
+}
+
+dependencies {
+    implementation 'io.quarkus:quarkus-core:3.20.0'
+    testImplementation 'io.vertx:vertx-junit5:5.0.0'
+}
+"#;
+        let imported = manifest_from_gradle(&source(text)).expect("import");
+        assert!(
+            imported.text.contains("[package]\nframework = \"quarkus\""),
+            "{}",
+            imported.text
+        );
+        assert!(
+            imported
+                .notes
+                .iter()
+                .any(|note| note.contains("io.quarkus"))
         );
     }
 

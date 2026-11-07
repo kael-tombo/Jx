@@ -13,10 +13,16 @@ workspace tests, builds five native targets, packages the archives, writes
 3. [security-checklist.md](security-checklist.md) has no unresolved finding
    that blocks release. Open owner actions may remain, but the approver must
    accept them explicitly.
-4. [CHANGELOG.md](../CHANGELOG.md) describes the release.
-5. The workspace version in `Cargo.toml` is the version being released. The
+4. `npm run test:packages` and `npm run validate:packages` pass; the renderer
+   checks the expected archive names, and the validation command uses winget,
+   PowerShell, Ruby and Chocolatey when they are installed (unavailable tools
+   are reported as skipped). CI runs the same pair on Ubuntu and Windows;
+   the Windows job is where `choco pack` is real, so a red `packages` job
+   blocks the tag.
+5. [CHANGELOG.md](../CHANGELOG.md) describes the release.
+6. The workspace version in `Cargo.toml` is the version being released. The
    workflow refuses a tag that does not match it.
-6. `v*` tag protection and private vulnerability reporting are configured (see
+7. `v*` tag protection and private vulnerability reporting are configured (see
    the checklist).
 
 ## Cut the release
@@ -26,11 +32,17 @@ workspace tests, builds five native targets, packages the archives, writes
 cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+# optional: live Maven Central smoke test (network required)
+cargo test -p jx-cli --test live_maven -- --ignored --nocapture
 
 git tag -a v1.0.0 -m "jx 1.0.0"
 git push origin main
 git push origin v1.0.0
 ```
+
+The same live test runs weekly and on manual dispatch on Linux and Windows in
+the [Live Maven Central workflow](../.github/workflows/live-maven.yml);
+pull-request CI remains hermetic.
 
 Pushing the tag starts the workflow. The `preflight` job fails before building
 anything if the tag and `Cargo.toml` disagree or `Cargo.lock` is stale, and the
@@ -50,6 +62,21 @@ Each archive contains the binary, `README.md`, `SECURITY.md` and both licence
 texts under one top-level directory. `SHA256SUMS` covers every archive, and
 `actions/attest-build-provenance` records the workflow provenance. The release
 is marked pre-release when the tag contains a hyphen (`v1.0.0-rc.1`).
+
+The workflow also renders OS package manifests from `SHA256SUMS` and attaches
+them to the release:
+
+| Path | Ecosystem |
+| --- | --- |
+| `chocolatey/` | Chocolatey package source; a Windows job also attaches `jx.<version>.nupkg` |
+| `homebrew/jx.rb` | Homebrew formula for a tap |
+| `scoop/jx.json` | Scoop bucket manifest |
+| `winget/KaelTombo.Jx/` | winget version, installer and locale manifests |
+
+None of these is pushed automatically. Submission needs the maintainer's
+Chocolatey API key, a Homebrew tap or homebrew-core review, a Scoop bucket, and
+a `microsoft/winget-pkgs` pull request. The generated files are release
+artifacts for those reviews.
 
 The Linux x64 binary builds on Ubuntu 22.04 (glibc 2.35). The arm64 binary
 builds on Ubuntu 24.04 (glibc 2.39); a static/musl build is not part of V1.
@@ -73,6 +100,28 @@ Then run [quickstart.md](quickstart.md) through `jx run` and `jx test` with the
 downloaded binary. On Windows, run `install.ps1` against the published tag and
 confirm the checksum check catches a corrupted download.
 
+Check the generated package files against the release:
+
+```sh
+node scripts/render-packages.mjs v1.0.0 dist
+npm run validate:packages
+# then compare dist/packaging with the assets attached to the GitHub release
+```
+
+On Windows, validate the rendered winget submission and require a clean
+result:
+
+```sh
+winget validate dist/packaging/winget/KaelTombo.Jx
+```
+
+The command exits 0 and prints `Manifest validation succeeded.`; a schema
+header warning means the generated file has regressed. Also unpack the
+attached `.nupkg` and confirm it contains `jx.nuspec`,
+`tools/chocolateyinstall.ps1` and `tools/chocolateyuninstall.ps1`.
+`choco pack` itself is exercised by the release job, so a release is the
+first place its output is checked.
+
 ## If a build fails
 
 * The workflow is safe to rerun: artifacts are uploaded by name, and an
@@ -91,3 +140,5 @@ confirm the checksum check catches a corrupted download.
   certificate.
 * Reproducible-build verification (`SOURCE_DATE_EPOCH` and an independent
   rebuild comparison).
+* Confirmation of the `jx` Chocolatey package id, the `KaelTombo.Jx` winget
+  identifier and the Homebrew tap name before the first submission.

@@ -5,8 +5,10 @@ mod build;
 mod deps;
 mod doctor;
 mod engine;
+mod framework;
 mod import;
 mod scaffold;
+mod script;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -61,9 +63,9 @@ impl From<ColorArg> for When {
 reproducible lockfile, and builds, tests, runs and packages Java projects from one \
 small manifest.\n\nStatus: V1 (1.0.0), release hardening complete. \
 Live: jx jdk <command>, jx new/init, \
-jx add/remove, jx lock/fetch, jx tree/why, jx build/test/run/package/image, \
-jx import (Maven or Gradle), jx export maven/gradle, delegated Maven/Gradle \
-builds via `[build] engine` or `--engine`, and jx doctor."
+jx add/remove, jx lock/update/fetch, jx tree/why, jx build/test/run/package/image, \
+jx import (Maven, Gradle or jot), jx export maven/gradle, delegated Maven/Gradle \
+builds via `[build] engine` or `--engine`, jx script (delegates to JBang), and jx doctor."
 )]
 struct Cli {
     /// Auto, always or never colour stderr output. NO_COLOR is always honoured.
@@ -102,10 +104,10 @@ enum Command {
     },
     /// Initialise jx in an existing directory
     Init,
-    /// Convert an existing Maven POM or Gradle build into project.toml
+    /// Convert an existing Maven POM, Gradle build or jot manifest into project.toml
     Import {
-        /// Path to pom.xml, build.gradle(.kts), or a directory containing one
-        /// (default: the current directory)
+        /// Path to pom.xml, build.gradle(.kts), jot.toml, or a directory
+        /// containing one (default: the current directory)
         path: Option<PathBuf>,
         /// Write the manifest here instead of ./project.toml
         #[arg(long, value_name = "PATH")]
@@ -127,6 +129,9 @@ enum Command {
         /// Add a `{ platform = … }` BOM entry instead of a normal dependency
         #[arg(long)]
         platform: bool,
+        /// Add to [processors] as an annotation processor
+        #[arg(long, conflicts_with_all = ["dev", "platform"])]
+        processor: bool,
         /// Local alias (default: the artifact id)
         #[arg(long, value_name = "NAME")]
         alias: Option<String>,
@@ -138,17 +143,37 @@ enum Command {
         /// Remove from [dev-dependencies] instead of [dependencies]
         #[arg(long)]
         dev: bool,
+        /// Remove from [processors] instead of [dependencies]
+        #[arg(long, conflicts_with = "dev")]
+        processor: bool,
     },
     /// Resolve the graph and write jx.lock
     Lock,
+    /// Refresh wanted dependency prefixes and write jx.lock
+    Update {
+        /// Update only this direct dependency (alias or group:artifact)
+        dependency: Option<String>,
+    },
     /// Download and verify the artifacts pinned in jx.lock
     Fetch,
     /// Print the resolved dependency graph
     Tree,
     /// Explain why an artifact is in the graph
     Why { coord: String },
+    /// Run a script through JBang (JBang must be installed)
+    Script {
+        /// A .java, .jsh, .kt, .groovy or markdown script
+        file: PathBuf,
+        /// Arguments after the script path go to the script
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Compile with the pinned JDK
-    Build,
+    Build {
+        /// Arguments after `--` go to the delegated Maven/Gradle tool
+        #[arg(last = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Build and run the main class; `jx run -- args` passes them on
     Run {
         /// Suspend in a JDWP server until a debugger attaches
@@ -162,7 +187,18 @@ enum Command {
         args: Vec<String>,
     },
     /// Compile main and test sources, then run JUnit 5
-    Test,
+    Test {
+        /// Run only this class, `Class#method`, or a package ending in `.*`
+        /// (repeatable; comma-separated values also work)
+        #[arg(long, value_name = "SELECTOR")]
+        filter: Vec<String>,
+        /// Directory for Surefire XML reports (default: target/surefire-reports)
+        #[arg(long, value_name = "DIR")]
+        reports_dir: Option<PathBuf>,
+        /// Arguments after `--` go to the delegated Maven/Gradle tool
+        #[arg(last = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Package classes into a jar and target/dist
     Package {
         /// Merge dependencies into one runnable jar instead of a thin jar + lib/
@@ -176,14 +212,18 @@ enum Command {
         full: bool,
     },
     /// Remove target/
-    Clean,
+    Clean {
+        /// Arguments after `--` go to the delegated Maven/Gradle tool
+        #[arg(last = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Manage JDK installations under ~/.jx/jdks
     #[command(subcommand)]
     Jdk(JdkCommand),
     /// Write an equivalent Maven or Gradle build
     #[command(subcommand)]
     Export(ExportCommand),
-    /// Check jx's environment: home, cache, network, Java, disk
+    /// Check jx's environment: home, cache, network, Java, disk, optional tools
     Doctor,
 }
 
@@ -243,7 +283,8 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
         Command::Doctor => doctor::run(cli, colors),
         Command::New { name, lib } => scaffold::new_project(name, *lib),
         Command::Init => scaffold::init_project(),
-        Command::Build => build::build(cli),
+        Command::Script { file, args } => script::run(cli, file.clone(), args.clone()),
+        Command::Build { args } => build::build(cli, args),
         Command::Run { debug, port, args } => build::run(
             cli,
             if *debug {
@@ -254,7 +295,7 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
             args.clone(),
         ),
         Command::Jdk(jdk) => run_jdk(cli, jdk).map(|()| ExitCode::SUCCESS),
-        Command::Clean => build::clean(cli),
+        Command::Clean { args } => build::clean(cli, args),
         Command::Import {
             path,
             output,
@@ -266,16 +307,27 @@ fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
             dependency,
             dev,
             platform,
+            processor,
             alias,
-        } => deps::add(cli, dependency, *dev, *platform, alias.clone()).map(|()| ExitCode::SUCCESS),
-        Command::Remove { alias, dev } => {
-            deps::remove(cli, alias, *dev).map(|()| ExitCode::SUCCESS)
-        }
+        } => deps::add(cli, dependency, *dev, *platform, *processor, alias.clone())
+            .map(|()| ExitCode::SUCCESS),
+        Command::Remove {
+            alias,
+            dev,
+            processor,
+        } => deps::remove(cli, alias, *dev, *processor).map(|()| ExitCode::SUCCESS),
         Command::Lock => deps::lock(cli).map(|()| ExitCode::SUCCESS),
+        Command::Update { dependency } => {
+            deps::update(cli, dependency.as_deref()).map(|()| ExitCode::SUCCESS)
+        }
         Command::Fetch => deps::fetch(cli).map(|()| ExitCode::SUCCESS),
         Command::Tree => deps::tree(cli).map(|()| ExitCode::SUCCESS),
         Command::Why { coord } => deps::why(cli, coord).map(|()| ExitCode::SUCCESS),
-        Command::Test => build::test(cli),
+        Command::Test {
+            filter,
+            reports_dir,
+            args,
+        } => build::test(cli, filter, reports_dir.as_deref(), args),
         Command::Package { fat } => build::package(cli, *fat).map(|()| ExitCode::SUCCESS),
         Command::Image { full } => build::image(cli, *full).map(|()| ExitCode::SUCCESS),
         Command::Export(ExportCommand::Maven { group_id, force }) => {
@@ -376,5 +428,33 @@ mod tests {
         assert!(parse_feature("25.0").is_err());
         assert!(parse_feature("abc").is_err());
         assert!(parse_feature("1000").is_err());
+    }
+
+    #[test]
+    fn delegated_tool_arguments_are_captured_after_the_separator() {
+        let cli = Cli::try_parse_from(["jx", "build", "--", "-DskipTests", "-Pfast"])
+            .expect("build arguments parse");
+        match cli.command {
+            Command::Build { args } => assert_eq!(args, ["-DskipTests", "-Pfast"]),
+            _ => panic!("expected build"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "jx",
+            "test",
+            "--filter",
+            "app.LibTest",
+            "--",
+            "--tests",
+            "app.LibTest",
+        ])
+        .expect("test arguments parse");
+        match cli.command {
+            Command::Test { filter, args, .. } => {
+                assert_eq!(filter, ["app.LibTest"]);
+                assert_eq!(args, ["--tests", "app.LibTest"]);
+            }
+            _ => panic!("expected test"),
+        }
     }
 }

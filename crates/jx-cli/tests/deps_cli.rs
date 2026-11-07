@@ -60,6 +60,53 @@ fn base_specs() -> Vec<(String, ResponseSpec)> {
             "ut/extra/2.0/extra-2.0.jar".to_string(),
             ResponseSpec::Sha256(b"extra-jar-bytes".to_vec()),
         ),
+        (
+            "ut/proc/1.0/proc-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(r#"  <groupId>ut</groupId>
+  <artifactId>proc</artifactId>
+  <version>1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>ut</groupId>
+      <artifactId>proc-lib</artifactId>
+      <version>1.0</version>
+    </dependency>
+  </dependencies>"#)),
+        ),
+        (
+            "ut/proc/1.0/proc-1.0.jar".to_string(),
+            ResponseSpec::Sha256(b"proc-jar-bytes".to_vec()),
+        ),
+        (
+            "ut/proc-lib/1.0/proc-lib-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>proc-lib</artifactId>\n  <version>1.0</version>",
+            )),
+        ),
+        (
+            "ut/proc-lib/1.0/proc-lib-1.0.jar".to_string(),
+            ResponseSpec::Sha256(b"proc-lib-jar-bytes".to_vec()),
+        ),
+        (
+            "ut/clash/1.0/clash-1.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>clash</artifactId>\n  <version>1.0</version>",
+            )),
+        ),
+        (
+            "ut/clash/1.0/clash-1.0.jar".to_string(),
+            ResponseSpec::Sha256(b"clash-1-jar-bytes".to_vec()),
+        ),
+        (
+            "ut/clash/2.0/clash-2.0.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>clash</artifactId>\n  <version>2.0</version>",
+            )),
+        ),
+        (
+            "ut/clash/2.0/clash-2.0.jar".to_string(),
+            ResponseSpec::Sha256(b"clash-2-jar-bytes".to_vec()),
+        ),
     ]
 }
 
@@ -70,7 +117,11 @@ struct Fixture {
 }
 
 fn setup() -> Fixture {
-    let repo = FakeRepo::spawn(base_specs());
+    setup_with_specs(base_specs(), manifest(""))
+}
+
+fn setup_with_specs(specs: Vec<(String, ResponseSpec)>, manifest_text: String) -> Fixture {
+    let repo = FakeRepo::spawn(specs);
     let home = TempDir::new().expect("jx home");
     std::fs::write(
         home.path().join("config.toml"),
@@ -78,7 +129,7 @@ fn setup() -> Fixture {
     )
     .expect("config written");
     let project = TempDir::new().expect("project dir");
-    std::fs::write(project.path().join("project.toml"), manifest("")).expect("manifest written");
+    std::fs::write(project.path().join("project.toml"), manifest_text).expect("manifest written");
     Fixture {
         home,
         project,
@@ -90,6 +141,57 @@ fn manifest(extra: &str) -> String {
     format!(
         "[project]\nname = \"app\"\nversion = \"0.1.0\"\njdk = \"25\"\n\n[dependencies]\napp = \"ut:app:=1.0\"\n{extra}"
     )
+}
+
+fn update_manifest(extra: &str, lib: &str) -> String {
+    format!(
+        "[project]\nname = \"app\"\nversion = \"0.1.0\"\njdk = \"25\"\n\n[dependencies]\nextra = \"ut:extra:{extra}\"\nlib = \"ut:lib:{lib}\"\n"
+    )
+}
+
+fn update_specs() -> Vec<(String, ResponseSpec)> {
+    let mut specs = base_specs();
+    specs.extend([
+        (
+            "ut/extra/2.1/extra-2.1.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>extra</artifactId>\n  <version>2.1</version>",
+            )),
+        ),
+        (
+            "ut/extra/2.1/extra-2.1.jar".to_string(),
+            ResponseSpec::Sha256(b"extra-2.1-jar-bytes".to_vec()),
+        ),
+        (
+            "ut/extra/maven-metadata.xml".to_string(),
+            ResponseSpec::Sha256(
+                b"<metadata><versioning><versions>\
+                  <version>2.0</version><version>2.1</version>\
+                  </versions></versioning></metadata>"
+                    .to_vec(),
+            ),
+        ),
+        (
+            "ut/lib/1.1/lib-1.1.pom".to_string(),
+            ResponseSpec::Sha256(pom(
+                "<groupId>ut</groupId>\n  <artifactId>lib</artifactId>\n  <version>1.1</version>",
+            )),
+        ),
+        (
+            "ut/lib/1.1/lib-1.1.jar".to_string(),
+            ResponseSpec::Sha256(b"lib-1.1-jar-bytes".to_vec()),
+        ),
+        (
+            "ut/lib/maven-metadata.xml".to_string(),
+            ResponseSpec::Sha256(
+                b"<metadata><versioning><versions>\
+                  <version>1.0</version><version>1.1</version>\
+                  </versions></versioning></metadata>"
+                    .to_vec(),
+            ),
+        ),
+    ]);
+    specs
 }
 
 impl Fixture {
@@ -148,6 +250,10 @@ fn lock_tree_why_and_offline_fetch_form_one_flow() {
     assert!(lock.contains("artifact = \"app\""), "{lock}");
     assert!(lock.contains("artifact = \"lib\""), "{lock}");
     assert_eq!(lock.matches("[[artifact]]").count(), 2);
+    assert!(
+        !lock.contains("[jdk]"),
+        "no JDK is installed, so no pin can be derived: {lock}"
+    );
 
     let tree = fixture.ok(&["tree"]);
     assert!(tree.contains("ut:app:1.0"), "{tree}");
@@ -190,6 +296,57 @@ fn add_and_remove_keep_the_manifest_and_lock_in_step() {
     assert_eq!(fixture.lock_text().matches("[[artifact]]").count(), 2);
     let manifest = std::fs::read_to_string(fixture.path().join("project.toml")).unwrap();
     assert!(!manifest.contains("extra ="), "{manifest}");
+}
+
+#[test]
+fn update_refreshes_one_prefix_and_preserves_other_locked_roots() {
+    let fixture = setup_with_specs(update_specs(), update_manifest("=2.0", "=1.0"));
+    fixture.ok(&["lock"]);
+
+    // Simulate the manifest moving from exact pins to prefixes. The lock still
+    // records the old versions, so a selected update has something to keep.
+    let manifest_path = fixture.path().join("project.toml");
+    std::fs::write(&manifest_path, update_manifest("2", "1")).unwrap();
+
+    let selected = fixture.ok(&["update", "extra"]);
+    assert!(selected.contains("ut:extra 2.0 -> 2.1"), "{selected}");
+    assert!(
+        !selected.contains("ut:lib 1.0 -> 1.1"),
+        "the non-target root must stay pinned: {selected}"
+    );
+    let lock = fixture.lock_text();
+    assert!(lock.contains("version = \"2.1\""), "{lock}");
+    assert!(lock.contains("version = \"1.0\""), "{lock}");
+    assert!(!lock.contains("version = \"1.1\""), "{lock}");
+
+    // No target refreshes every wanted prefix, including the one deliberately
+    // preserved above.
+    let all = fixture.ok(&["update"]);
+    assert!(all.contains("ut:lib 1.0 -> 1.1"), "{all}");
+    let lock = fixture.lock_text();
+    assert!(lock.contains("version = \"2.1\""), "{lock}");
+    assert!(lock.contains("version = \"1.1\""), "{lock}");
+}
+
+#[test]
+fn update_refuses_exact_pins_and_locked_mode() {
+    let fixture = setup();
+    fixture.ok(&["lock"]);
+
+    let exact = fixture.fail(&["update", "app"]);
+    assert!(exact.contains("pinned exactly"), "{exact}");
+
+    let locked = fixture.fail(&["--locked", "update"]);
+    assert!(locked.contains("always writes jx.lock"), "{locked}");
+}
+
+#[test]
+fn update_without_a_target_can_create_the_lockfile() {
+    let fixture = setup();
+    let output = fixture.ok(&["update"]);
+    assert!(output.contains("ut:app added (1.0)"), "{output}");
+    assert!(output.contains("2 version changes"), "{output}");
+    assert_eq!(fixture.lock_text().matches("[[artifact]]").count(), 2);
 }
 
 #[test]
@@ -280,4 +437,222 @@ fn offline_lock_with_an_empty_cache_explains_the_cache_requirement() {
         error.contains("never fetched") || error.contains("offline cache"),
         "{error}"
     );
+}
+
+#[test]
+fn processors_lock_and_tree_separately_from_the_app_graph() {
+    let fixture = setup();
+    std::fs::write(
+        fixture.path().join("project.toml"),
+        manifest("\n[processors]\nproc = \"ut:proc:=1.0\"\n"),
+    )
+    .unwrap();
+
+    let locked = fixture.ok(&["lock"]);
+    assert!(locked.contains("4 artifacts"), "{locked}");
+    let lock = fixture.lock_text();
+    assert_eq!(lock.matches("[[artifact]]").count(), 4);
+    assert!(lock.contains("version = 3"), "{lock}");
+    // Processor-only entries never join the app classpath.
+    assert_eq!(lock.matches("app = false").count(), 2, "{lock}");
+    assert_eq!(lock.matches("processor = true").count(), 2, "{lock}");
+
+    let tree = fixture.ok(&["tree"]);
+    assert!(tree.contains("annotation processors:"), "{tree}");
+    let processor_section = tree
+        .split("annotation processors:")
+        .nth(1)
+        .expect("processor section");
+    assert!(processor_section.contains("ut:proc:1.0"), "{tree}");
+    assert!(
+        processor_section
+            .lines()
+            .any(|line| line.starts_with("  ut:proc-lib:1.0")),
+        "{tree}"
+    );
+
+    let fetched = fixture.ok(&["--offline", "fetch"]);
+    assert!(fetched.contains("4 artifacts ready"), "{fetched}");
+    assert!(fetched.contains("4 cached"), "{fetched}");
+
+    let why = fixture.ok(&["why", "ut:proc"]);
+    assert!(why.contains("annotation processors:"), "{why}");
+    assert!(why.contains("ut:proc:1.0 (direct)"), "{why}");
+    assert!(why.contains("1 level from [processors]"), "{why}");
+
+    let transitive = fixture.ok(&["why", "ut:proc-lib"]);
+    assert!(transitive.contains("ut:proc:1.0 (direct)"), "{transitive}");
+    assert!(
+        transitive
+            .lines()
+            .any(|line| line.starts_with("  ut:proc-lib:1.0")),
+        "{transitive}"
+    );
+    assert!(
+        transitive.contains("2 levels from [processors]"),
+        "{transitive}"
+    );
+
+    let app = fixture.ok(&["why", "ut:app"]);
+    assert!(!app.contains("annotation processors:"), "{app}");
+
+    let error = fixture.fail(&["why", "ut:absent"]);
+    assert!(
+        error.contains("not in the app or annotation-processor graph"),
+        "{error}"
+    );
+}
+
+#[test]
+fn why_reports_both_paths_when_an_artifact_serves_both_roles() {
+    let fixture = setup();
+    std::fs::write(
+        fixture.path().join("project.toml"),
+        manifest("\n[processors]\nlib = \"ut:lib:=1.0\"\n"),
+    )
+    .unwrap();
+
+    let why = fixture.ok(&["why", "ut:lib"]);
+    assert!(why.contains("app graph:"), "{why}");
+    assert!(why.contains("annotation processors:"), "{why}");
+    assert!(why.contains("2 levels from the manifest"), "{why}");
+    assert!(why.contains("1 level from [processors]"), "{why}");
+}
+
+#[test]
+fn processor_add_and_remove_use_the_processors_table() {
+    let fixture = setup();
+    fixture.ok(&["lock"]);
+
+    let added = fixture.ok(&["add", "--processor", "ut:proc:=1.0"]);
+    assert!(
+        added.contains("added `proc` = \"ut:proc:=1.0\" to [processors]"),
+        "{added}"
+    );
+    let manifest = std::fs::read_to_string(fixture.path().join("project.toml")).unwrap();
+    assert!(manifest.contains("[processors]"), "{manifest}");
+    assert!(manifest.contains("proc = \"ut:proc:=1.0\""), "{manifest}");
+    assert_eq!(fixture.lock_text().matches("[[artifact]]").count(), 4);
+    assert!(fixture.lock_text().contains("processor = true"));
+
+    // Removing from the default table names the right flag instead of
+    // silently doing nothing.
+    let wrong_table = fixture.fail(&["remove", "proc"]);
+    assert!(
+        wrong_table.contains("declared in [processors]"),
+        "{wrong_table}"
+    );
+    assert!(wrong_table.contains("--processor"), "{wrong_table}");
+
+    let removed = fixture.ok(&["remove", "--processor", "proc"]);
+    assert!(
+        removed.contains("removed `proc` from [processors]"),
+        "{removed}"
+    );
+    assert_eq!(fixture.lock_text().matches("[[artifact]]").count(), 2);
+    let manifest = std::fs::read_to_string(fixture.path().join("project.toml")).unwrap();
+    assert!(!manifest.contains("proc ="), "{manifest}");
+}
+
+#[test]
+fn a_processor_version_clash_is_a_hard_error_that_overrides_can_fix() {
+    let fixture = setup();
+    let clashing = |overrides: &str| {
+        format!(
+            "[project]\nname = \"app\"\nversion = \"0.1.0\"\njdk = \"25\"\n\n\
+             [dependencies]\napp = \"ut:app:=1.0\"\nclash = \"ut:clash:=1.0\"\n\n\
+             [processors]\nclash = \"ut:clash:=2.0\"\n{overrides}"
+        )
+    };
+    std::fs::write(fixture.path().join("project.toml"), clashing("")).unwrap();
+    let error = fixture.fail(&["lock"]);
+    assert!(
+        error.contains("is 1.0 in the app graph and 2.0 in [processors]"),
+        "{error}"
+    );
+    assert!(error.contains("[overrides]"), "{error}");
+
+    // One override pins both graphs to one version, so the entry can merge
+    // into a single artifact that serves both roles.
+    std::fs::write(
+        fixture.path().join("project.toml"),
+        clashing("\n[overrides]\n\"ut:clash\" = \"1.0\"\n"),
+    )
+    .unwrap();
+    fixture.ok(&["lock"]);
+    let lock = fixture.lock_text();
+    assert_eq!(lock.matches("[[artifact]]").count(), 3);
+    let clash = lock
+        .split("[[artifact]]")
+        .find(|block| block.contains("artifact = \"clash\""))
+        .expect("clash entry");
+    assert!(clash.contains("processor = true"), "{lock}");
+    assert!(!clash.contains("app = false"), "{lock}");
+}
+
+#[test]
+fn lock_records_the_installed_jdk_pin() {
+    let fixture = setup();
+    // A JDK installed by jx: the store entry plus the archive it came from.
+    let jdk = fixture.home.path().join("jdks").join("temurin-25.0.5+8");
+    std::fs::create_dir_all(jdk.join("bin")).unwrap();
+    std::fs::write(jdk.join("release"), "JAVA_VERSION=\"25.0.5\"\n").unwrap();
+    let archive = fixture
+        .home
+        .path()
+        .join("cache")
+        .join("jdks")
+        .join("25.0.5+8.tar.gz");
+    std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+    std::fs::write(&archive, b"jdk-archive").unwrap();
+
+    fixture.ok(&["lock"]);
+    let lock = fixture.lock_text();
+    let pin = lock
+        .split("[[artifact]]")
+        .next()
+        .expect("the lock always has text");
+    assert!(pin.contains("[jdk]"), "{lock}");
+    assert!(pin.contains("provider = \"temurin\""), "{lock}");
+    assert!(pin.contains("feature = 25"), "{lock}");
+    assert!(pin.contains("release = \"25.0.5+8\""), "{lock}");
+    assert!(
+        pin.contains(
+            "sha256 = \"c50e2535b0ac0d30c33bc98c9f23815badde2c01ad0ba43a109ecc319207034d\""
+        ),
+        "the pin records the cached archive's checksum: {lock}"
+    );
+
+    // The pinned release is installed, so an offline fetch verifies it.
+    let fetched = fixture.ok(&["--offline", "fetch"]);
+    assert!(fetched.contains("2 artifacts ready"), "{fetched}");
+
+    // A newer installed build replaces the pin on the next explicit lock.
+    let newer = fixture.home.path().join("jdks").join("temurin-25.0.6+1");
+    std::fs::create_dir_all(newer.join("bin")).unwrap();
+    std::fs::write(newer.join("release"), "JAVA_VERSION=\"25.0.6\"\n").unwrap();
+    let newer_archive = fixture
+        .home
+        .path()
+        .join("cache")
+        .join("jdks")
+        .join("25.0.6+1.tar.gz");
+    std::fs::write(&newer_archive, b"jdk-archive").unwrap();
+    fixture.ok(&["lock"]);
+    let relocked = fixture.lock_text();
+    assert_eq!(relocked.matches("[jdk]").count(), 1, "{relocked}");
+    assert!(
+        relocked.contains("release = \"25.0.6+1\""),
+        "the installed build becomes the pin: {relocked}"
+    );
+    assert!(
+        relocked.contains(
+            "sha256 = \"c50e2535b0ac0d30c33bc98c9f23815badde2c01ad0ba43a109ecc319207034d\""
+        ),
+        "the new pin records its archive: {relocked}"
+    );
+
+    // Re-locking the same toolchain is stable.
+    let again = fixture.ok(&["lock"]);
+    assert!(again.contains("up to date"), "{again}");
 }

@@ -58,6 +58,14 @@ the tool's stdout/stderr. The tool's exit code is jx's exit code. `--offline`
 is forwarded as Maven `-o` or Gradle `--offline`. jx prints one `delegating
 to …` line unless `--quiet`.
 
+Arguments after a bare `--` are forwarded verbatim to the external tool,
+after jx's mapped goal: `jx build -- --parallel`,
+`jx test -- --tests app.LibTest`, `jx clean -- --refresh-dependencies`.
+They are passed as separate argv entries, never through a shell. Passing
+them under the jx engine is a usage error, not a silent no-op. jx's own
+`--filter` and `--reports-dir` stay refused in delegated mode because the
+tool owns test selection and report generation.
+
 ### What is refused
 
 The external build owns dependency resolution, compilation and packaging, so
@@ -99,6 +107,13 @@ old behaviour and removes `target/` below the current directory.
   security and portability hazard. Commands are built with `Command` and
   fixed arguments; Windows only uses `cmd /C` to execute `.cmd`/`.bat`
   wrappers, which the OS cannot launch directly.
+* **Translate `--filter`/`--reports-dir` into tool-specific flags** — Maven
+  and Gradle select tests differently and write different reports. A
+  mistranslation would silently run the wrong tests, so raw arguments after
+  `--` keep jx's own flags honest and give the tool its native interface.
+* **Accept trailing arguments under the jx engine and ignore them** — a
+  silently dropped flag is worse than a usage error; the command has no
+  external tool to receive it.
 
 ## Consequences
 
@@ -107,7 +122,8 @@ old behaviour and removes `target/` below the current directory.
   command surface, and absence of the tool is diagnosed rather than emulated.
 * A project whose build jx cannot reproduce can still use `jx build`,
   `jx test` and `jx clean` with jx's pinned JDK, while Maven or Gradle keeps
-  full control of dependencies, plugins and packaging.
+  full control of dependencies, plugins and packaging. The tool's own flags
+  are available after `--` without a second command or a wrapper script.
 * Reproducibility is the external build's. jx.lock and `jx fetch` are not
   involved in delegated commands, and the build tool may use its own cache
   and network policy. The documentation says so instead of implying otherwise.

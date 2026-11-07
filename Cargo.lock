@@ -510,6 +510,7 @@ dependencies = [
  "jx-common",
  "jx-maven",
  "tempfile",
+ "toml",
 ]
 
 [[package]]

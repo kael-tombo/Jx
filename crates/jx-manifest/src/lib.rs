@@ -21,7 +21,7 @@ pub use deps::{DependencySpec, WantedVersion};
 pub use edit::{DepTable, add_dependency, has_alias, remove_dependency};
 
 /// Tables jx's manifest supports or reserves for upcoming milestones.
-const KNOWN_TABLES: [&str; 8] = [
+const KNOWN_TABLES: [&str; 9] = [
     "project",
     "dependencies",
     "dev-dependencies",
@@ -30,6 +30,7 @@ const KNOWN_TABLES: [&str; 8] = [
     "run",
     "repositories",
     "build",
+    "package",
 ];
 
 /// Keys allowed inside `[project]`.
@@ -37,6 +38,9 @@ const PROJECT_KEYS: [&str; 3] = ["name", "version", "jdk"];
 
 /// Keys allowed inside `[build]`.
 const BUILD_KEYS: [&str; 1] = ["engine"];
+
+/// Keys allowed inside `[package]`.
+const PACKAGE_KEYS: [&str; 1] = ["framework"];
 
 /// Which engine owns the project's build.
 ///
@@ -84,6 +88,67 @@ impl BuildEngine {
     }
 }
 
+/// `[package] framework`: the runnable layout `jx package` writes.
+///
+/// The adapter writes a layout, not a plugin build. `SpringBoot` reproduces
+/// the Boot 3.2-and-later executable jar (including Boot 4); `Micronaut` and
+/// `Vertx` need the merged fat jar their own shadow/fat-jar builds produce.
+/// `JavaFx` selects a portable thin jar launched through a separate launcher
+/// class. `Quarkus` and `JakartaEe` are recognized so the refusal is
+/// specific: Quarkus generates its layout while augmenting, and a WAR needs
+/// container-provided APIs jx cannot express.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Framework {
+    /// Thin jar plus `dist/lib`, or a merged fat jar with `--fat`.
+    #[default]
+    Plain,
+    /// Boot 3.2-and-later executable jar (`BOOT-INF/classes`, `BOOT-INF/lib`).
+    SpringBoot,
+    /// One merged executable jar, as Micronaut's shadow jar is.
+    Micronaut,
+    /// One merged executable jar launched through the Vert.x launcher.
+    Vertx,
+    /// Portable thin jar for a JavaFX launcher class.
+    JavaFx,
+    /// Refused: Quarkus generates its runnable layout during augmentation.
+    Quarkus,
+    /// Refused: jx has no `provided` scope for a container WAR.
+    JakartaEe,
+}
+
+impl Framework {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Framework::Plain => "plain",
+            Framework::SpringBoot => "spring-boot",
+            Framework::Micronaut => "micronaut",
+            Framework::Vertx => "vertx",
+            Framework::JavaFx => "javafx",
+            Framework::Quarkus => "quarkus",
+            Framework::JakartaEe => "jakarta-ee",
+        }
+    }
+
+    /// `[package] framework = "…"`, rejected with the allowed set.
+    pub fn parse(raw: &str, path: &Path) -> Result<Self, JxError> {
+        match raw.trim() {
+            "plain" => Ok(Framework::Plain),
+            "spring-boot" => Ok(Framework::SpringBoot),
+            "micronaut" => Ok(Framework::Micronaut),
+            "vertx" => Ok(Framework::Vertx),
+            "javafx" => Ok(Framework::JavaFx),
+            "quarkus" => Ok(Framework::Quarkus),
+            "jakarta-ee" | "javaee" | "j2ee" => Ok(Framework::JakartaEe),
+            other => Err(JxError::new(
+                Kind::Manifest,
+                format!("[package] framework = {other:?} is not a framework jx packages"),
+            )
+            .at(path.display().to_string())
+            .hint("use `plain`, `spring-boot`, `micronaut`, `vertx`, `javafx`, `quarkus` or `jakarta-ee`")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     pub name: String,
@@ -96,10 +161,15 @@ pub struct Manifest {
     pub dependencies: Vec<deps::DependencySpec>,
     /// `[dev-dependencies]`, validated shapes.
     pub dev_dependencies: Vec<deps::DependencySpec>,
+    /// `[processors]`, validated shapes: annotation-processor jars with
+    /// explicit versions (ADR 0014).
+    pub processors: Vec<deps::DependencySpec>,
     /// `[overrides]`, validated shapes: explicit, always-visible pins (ADR 0004).
     pub overrides: Vec<deps::OverrideSpec>,
     /// `[build] engine`; `Jx` unless the project delegates its build.
     pub build_engine: BuildEngine,
+    /// `[package] framework`; `Plain` unless a layout adapter is selected.
+    pub framework: Framework,
 }
 
 use jx_common::diagnose::{closest, unknown_key_error as shared_unknown_key_error};
@@ -229,6 +299,7 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
     })?;
 
     let mut build_engine = BuildEngine::Jx;
+    let mut framework = Framework::Plain;
     if let Some(build) = table.get("build") {
         let build = build.as_table().ok_or_else(|| {
             JxError::new(Kind::Manifest, "[build] must be a table").at(path.display().to_string())
@@ -245,6 +316,25 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
                     .hint("use `engine = \"jx\"`, `\"maven\"` or `\"gradle\"`")
             })?;
             build_engine = BuildEngine::parse(raw, path)?;
+        }
+    }
+
+    if let Some(package) = table.get("package") {
+        let package = package.as_table().ok_or_else(|| {
+            JxError::new(Kind::Manifest, "[package] must be a table").at(path.display().to_string())
+        })?;
+        for key in package.keys() {
+            if !PACKAGE_KEYS.contains(&key.as_str()) {
+                return Err(unknown_key_error("package", key, &PACKAGE_KEYS));
+            }
+        }
+        if let Some(value) = package.get("framework") {
+            let raw = value.as_str().ok_or_else(|| {
+                JxError::new(Kind::Manifest, "[package] framework must be a string")
+                    .at(path.display().to_string())
+                    .hint("use `framework = \"spring-boot\"`")
+            })?;
+            framework = Framework::parse(raw, path)?;
         }
     }
 
@@ -286,6 +376,7 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
     // Dependency tables are validated here so a typo in a coordinate fails
     // at parse time, never deep inside resolution.
     let (dependencies, dev_dependencies) = deps::parse_tables(table, path)?;
+    let processors = deps::parse_processors(table, path)?;
     let overrides = deps::parse_overrides(table, path)?;
 
     Ok(Manifest {
@@ -295,8 +386,10 @@ pub fn parse_text(raw: &str, path: &Path) -> Result<Manifest, JxError> {
         main,
         dependencies,
         dev_dependencies,
+        processors,
         overrides,
         build_engine,
+        framework,
     })
 }
 
@@ -441,6 +534,60 @@ mod tests {
         assert!(e.message.contains("did you mean `engine`"), "{e}");
 
         let p = manifest_at(dir.path(), &format!("build = \"maven\"\n\n{base}"));
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("must be a table"), "{e}");
+    }
+
+    #[test]
+    fn framework_defaults_to_plain_and_parses_every_adapter() {
+        let dir = tempdir().unwrap();
+        let base = "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n";
+        let p = manifest_at(dir.path(), base);
+        assert_eq!(parse(&p).unwrap().framework, Framework::Plain);
+
+        for (raw, expected) in [
+            ("plain", Framework::Plain),
+            ("spring-boot", Framework::SpringBoot),
+            ("micronaut", Framework::Micronaut),
+            ("vertx", Framework::Vertx),
+            ("javafx", Framework::JavaFx),
+            ("quarkus", Framework::Quarkus),
+            ("jakarta-ee", Framework::JakartaEe),
+            ("javaee", Framework::JakartaEe),
+            ("j2ee", Framework::JakartaEe),
+        ] {
+            let p = manifest_at(
+                dir.path(),
+                &format!("{base}\n[package]\nframework = \"{raw}\"\n"),
+            );
+            assert_eq!(parse(&p).unwrap().framework, expected, "{raw}");
+        }
+    }
+
+    #[test]
+    fn package_framework_is_strict() {
+        let dir = tempdir().unwrap();
+        let base = "[project]\nname = \"h\"\nversion = \"0.1.0\"\njdk = \"25\"\n";
+
+        let p = manifest_at(
+            dir.path(),
+            &format!("{base}\n[package]\nframework = \"dropwizard\"\n"),
+        );
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("not a framework jx packages"), "{e}");
+        assert!(e.hint.is_some_and(|hint| hint.contains("spring-boot")));
+
+        let p = manifest_at(dir.path(), &format!("{base}\n[package]\nframework = 1\n"));
+        assert!(parse(&p).unwrap_err().message.contains("must be a string"));
+
+        let p = manifest_at(
+            dir.path(),
+            &format!("{base}\n[package]\nframwork = \"spring-boot\"\n"),
+        );
+        let e = parse(&p).unwrap_err();
+        assert!(e.message.contains("unknown key `framwork`"), "{e}");
+
+        let p = manifest_at(dir.path(), &format!("package = \"spring-boot\"\n\n{base}"));
         let e = parse(&p).unwrap_err();
         assert!(e.message.contains("must be a table"), "{e}");
     }

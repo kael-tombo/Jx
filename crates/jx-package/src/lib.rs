@@ -18,6 +18,7 @@ use jx_common::error::{JxError, Kind};
 pub mod gradle;
 pub mod image;
 pub mod maven;
+pub mod spring_boot;
 
 /// Thin jar + `dist/lib`, or one merged fat jar.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -42,6 +43,9 @@ pub struct PackageRequest<'a> {
     pub classes_dir: &'a Path,
     pub jar_name: &'a str,
     pub main_class: Option<&'a str>,
+    /// Extra manifest headers after `Main-Class`, e.g. Vert.x's
+    /// `Main-Verticle`. Standard jar headers cannot be overridden here.
+    pub extra_manifest: &'a [(&'a str, &'a str)],
     pub dependencies: &'a [DependencyJar<'a>],
 }
 
@@ -131,6 +135,7 @@ fn package_thin(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> 
         request.classes_dir,
         request.main_class,
         &class_path,
+        request.extra_manifest,
     )?;
     Ok(PackageOutput {
         jar: jar_path,
@@ -149,6 +154,7 @@ fn package_fat(request: &PackageRequest<'_>) -> Result<PackageOutput, JxError> {
         &jar_path,
         request.classes_dir,
         request.main_class,
+        request.extra_manifest,
         request.dependencies,
         &mut stats,
     )?;
@@ -219,8 +225,9 @@ fn write_jar(
     classes_dir: &Path,
     main_class: Option<&str>,
     class_path: &[String],
+    extra_manifest: &[(&str, &str)],
 ) -> Result<(), JxError> {
-    let manifest = manifest_text(main_class, class_path)?;
+    let manifest = manifest_text(main_class, class_path, extra_manifest)?;
     let file = std::fs::File::create(output).map_err(|e| {
         JxError::new(Kind::Io, "cannot create the package jar")
             .at(output.display().to_string())
@@ -235,6 +242,9 @@ fn write_jar(
     zip.write_all(manifest.as_bytes())
         .map_err(|e| io_error("cannot write the jar manifest", output, e))?;
 
+    let mut seen = HashSet::new();
+    seen.insert("META-INF/MANIFEST.MF".to_string());
+    write_parent_directories(&mut zip, options, &mut seen, "META-INF/MANIFEST.MF", output)?;
     for source in collect_files(classes_dir)? {
         let relative = source
             .strip_prefix(classes_dir)
@@ -247,6 +257,7 @@ fn write_jar(
         if name.eq_ignore_ascii_case("META-INF/MANIFEST.MF") {
             continue;
         }
+        write_parent_directories(&mut zip, options, &mut seen, &name, output)?;
         zip.start_file(&name, options)
             .map_err(|e| zip_error(output, e))?;
         let mut input = std::fs::File::open(&source)
@@ -274,10 +285,11 @@ fn write_fat_jar(
     output: &Path,
     classes_dir: &Path,
     main_class: Option<&str>,
+    extra_manifest: &[(&str, &str)],
     dependencies: &[DependencyJar<'_>],
     stats: &mut FatStats,
 ) -> Result<(), JxError> {
-    let manifest = manifest_text(main_class, &[])?;
+    let manifest = manifest_text(main_class, &[], extra_manifest)?;
     let file = std::fs::File::create(output).map_err(|e| {
         JxError::new(Kind::Io, "cannot create the fat jar")
             .at(output.display().to_string())
@@ -294,6 +306,7 @@ fn write_fat_jar(
 
     let mut seen: HashSet<String> = HashSet::new();
     seen.insert("META-INF/MANIFEST.MF".to_string());
+    write_parent_directories(&mut zip, options, &mut seen, "META-INF/MANIFEST.MF", output)?;
     let mut services: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
     for source in collect_files(classes_dir)? {
@@ -326,6 +339,7 @@ fn write_fat_jar(
             stats.duplicates += 1;
             continue;
         }
+        write_parent_directories(&mut zip, options, &mut seen, &name, output)?;
         zip.start_file(&name, options)
             .map_err(|e| zip_error(output, e))?;
         let mut input = std::fs::File::open(&source)
@@ -379,6 +393,7 @@ fn write_fat_jar(
                 stats.duplicates += 1;
                 continue;
             }
+            write_parent_directories(&mut zip, options, &mut seen, &name, output)?;
             zip.start_file(&name, options)
                 .map_err(|e| zip_error(output, e))?;
             std::io::copy(&mut entry, &mut zip)
@@ -388,6 +403,7 @@ fn write_fat_jar(
 
     for (service, providers) in services {
         let name = format!("META-INF/services/{service}");
+        write_parent_directories(&mut zip, options, &mut seen, &name, output)?;
         zip.start_file(&name, options)
             .map_err(|e| zip_error(output, e))?;
         for provider in providers {
@@ -433,6 +449,45 @@ fn add_providers(service: &str, text: &str, services: &mut BTreeMap<String, BTre
     }
 }
 
+/// Every ancestor directory of a jar entry, each with a trailing slash:
+/// `a/b/C.class` yields `a/` then `a/b/`. Frameworks such as Micronaut
+/// discover bean definitions by listing resource directories (for example
+/// `META-INF/micronaut/io.micronaut.inject.BeanDefinitionReference/`),
+/// which only resolves when the jar carries explicit directory entries,
+/// so every jar jx writes includes them.
+pub(crate) fn ancestor_directories(entry: &str) -> Vec<String> {
+    let mut directories = Vec::new();
+    let mut prefix = String::new();
+    let parts: Vec<&str> = entry.split('/').collect();
+    for part in &parts[..parts.len().saturating_sub(1)] {
+        prefix.push_str(part);
+        prefix.push('/');
+        if !directories.contains(&prefix) {
+            directories.push(prefix.clone());
+        }
+    }
+    directories
+}
+
+/// Write the ancestor directories of `name` that are not in the jar yet.
+/// Directory names end with `/`, so they never collide with the file names
+/// tracked in `seen`.
+fn write_parent_directories<W: std::io::Write + std::io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    options: zip::write::SimpleFileOptions,
+    seen: &mut HashSet<String>,
+    name: &str,
+    output: &Path,
+) -> Result<(), JxError> {
+    for dir in ancestor_directories(name) {
+        if seen.insert(dir.clone()) {
+            zip.add_directory(&dir, options)
+                .map_err(|e| zip_error(output, e))?;
+        }
+    }
+    Ok(())
+}
+
 fn safe_entry_name(name: &str) -> bool {
     !name.is_empty()
         && !name.starts_with('/')
@@ -445,7 +500,11 @@ fn safe_entry_name(name: &str) -> bool {
 
 /// The manifest text, with header lines wrapped exactly as the jar format
 /// expects (no line over 72 bytes; continuations start with one space).
-fn manifest_text(main_class: Option<&str>, class_path: &[String]) -> Result<String, JxError> {
+fn manifest_text(
+    main_class: Option<&str>,
+    class_path: &[String],
+    extra_manifest: &[(&str, &str)],
+) -> Result<String, JxError> {
     let mut out = String::new();
     push_header(&mut out, "Manifest-Version", "1.0");
     push_header(
@@ -464,6 +523,11 @@ fn manifest_text(main_class: Option<&str>, class_path: &[String]) -> Result<Stri
             .hint("fix `[run] main` in project.toml"));
         }
         push_header(&mut out, "Main-Class", main);
+    }
+    for (key, value) in extra_manifest {
+        validate_manifest_key(key)?;
+        validate_manifest_value(key, value)?;
+        push_header(&mut out, key, value);
     }
     if !class_path.is_empty() {
         for entry in class_path {
@@ -500,6 +564,30 @@ fn push_header(out: &mut String, key: &str, value: &str) {
         start = end;
         first = false;
     }
+}
+
+fn validate_manifest_key(header: &str) -> Result<(), JxError> {
+    let safe = !header.is_empty()
+        && header
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'));
+    if !safe {
+        return Err(JxError::new(
+            Kind::Build,
+            format!("{header:?} cannot be written as a jar manifest header"),
+        )
+        .hint("manifest header names use ASCII letters, digits, '-' and '_"));
+    }
+    for reserved in ["Manifest-Version", "Created-By", "Main-Class", "Class-Path"] {
+        if header.eq_ignore_ascii_case(reserved) {
+            return Err(JxError::new(
+                Kind::Build,
+                format!("{header} cannot override the standard jar manifest"),
+            )
+            .hint("pass the main class or classpath through the request instead"));
+        }
+    }
+    Ok(())
 }
 
 fn validate_manifest_value(header: &str, value: &str) -> Result<(), JxError> {
@@ -687,6 +775,7 @@ mod tests {
             classes_dir: &classes,
             jar_name: "app-0.1.0.jar",
             main_class: Some("app.App"),
+            extra_manifest: &[],
             dependencies: &[DependencyJar {
                 relative_path: &relative,
                 source: &dependency,
@@ -707,8 +796,11 @@ mod tests {
         assert_eq!(
             names,
             vec![
+                "META-INF/",
                 "META-INF/MANIFEST.MF",
+                "app/",
                 "app/App.class",
+                "config/",
                 "config/app.properties"
             ]
         );
@@ -756,6 +848,7 @@ mod tests {
             classes_dir: &classes,
             jar_name: "app-0.1.0-all.jar",
             main_class: Some("app.App"),
+            extra_manifest: &[("Main-Verticle", "app.Verticle")],
             dependencies: &[
                 DependencyJar {
                     relative_path: "ignored/dep1.jar",
@@ -776,6 +869,10 @@ mod tests {
 
         let (manifest, names) = read_jar(&output.jar);
         assert!(manifest.contains("Main-Class: app.App\r\n"), "{manifest}");
+        assert!(
+            manifest.contains("Main-Verticle: app.Verticle\r\n"),
+            "{manifest}"
+        );
         assert!(!manifest.contains("Class-Path"), "{manifest}");
         assert!(!names.iter().any(|name| name.ends_with(".SF")));
         assert!(
@@ -787,6 +884,14 @@ mod tests {
         assert_eq!(read_entry(&output.jar, "app/App.class"), b"project-app");
         assert_eq!(read_entry(&output.jar, "dep/One.class"), b"one");
         assert_eq!(read_entry(&output.jar, "dep/Two.class"), b"two");
+        // Directory listings (Micronaut bean discovery, Boot loaders) only
+        // resolve when the jar carries explicit directory entries.
+        for dir_entry in ["META-INF/", "META-INF/services/", "app/", "dep/"] {
+            assert!(
+                names.contains(&dir_entry.to_string()),
+                "{dir_entry} is an explicit entry: {names:?}"
+            );
+        }
         let services =
             String::from_utf8(read_entry(&output.jar, "META-INF/services/com.example.Spi"))
                 .unwrap();
@@ -805,6 +910,7 @@ mod tests {
             classes_dir: &classes,
             jar_name: "lib-0.1.0.jar",
             main_class: None,
+            extra_manifest: &[],
             dependencies: &[],
         })
         .unwrap();
@@ -819,7 +925,7 @@ mod tests {
             "lib/com/example/{}/artifact-1.0.jar",
             "verylongsegment".repeat(5)
         );
-        let manifest = manifest_text(Some("app.App"), std::slice::from_ref(&entry)).unwrap();
+        let manifest = manifest_text(Some("app.App"), std::slice::from_ref(&entry), &[]).unwrap();
         for line in manifest.split("\r\n") {
             assert!(line.len() <= 72, "line too long ({}): {line:?}", line.len());
         }
@@ -849,8 +955,9 @@ mod tests {
         assert!(dependency_relative_path("com..example", "lib.jar").is_err());
         assert!(validate_relative_path("lib/../escape.jar").is_err());
         assert!(validate_relative_path("lib\\escape.jar").is_err());
-        assert!(manifest_text(Some("app\nInjected"), &[]).is_err());
-        assert!(manifest_text(Some("app App"), &[]).is_err());
-        assert!(manifest_text(None, &["lib/with space.jar".to_string()]).is_err());
+        assert!(manifest_text(Some("app\nInjected"), &[], &[]).is_err());
+        assert!(manifest_text(Some("app App"), &[], &[]).is_err());
+        assert!(manifest_text(None, &["lib/with space.jar".to_string()], &[]).is_err());
+        assert!(manifest_text(Some("app.App"), &[], &[("Main-Class", "other")]).is_err());
     }
 }

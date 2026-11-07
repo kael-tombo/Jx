@@ -77,6 +77,13 @@ pub struct EffectivePom {
     /// decides whether and in what order these extend the configured
     /// repositories (M3, per ADR 0003).
     pub repositories: Vec<RawRepository>,
+    /// `maven-compiler-plugin`'s `<annotationProcessorPaths>` entries from the
+    /// merged parent chain (a POM's own non-empty list replaces an ancestor's).
+    /// Interpolated; entries are expected to carry an exact version.
+    pub annotation_processor_paths: Vec<Dependency>,
+    /// `<annotationProcessors>` class names, kept so import can report that
+    /// jx will run every processor on the path rather than a narrowed set.
+    pub annotation_processors: Vec<String>,
 }
 
 impl EffectivePom {
@@ -194,6 +201,10 @@ impl<'a> PomLoader<'a> {
         for dep in &merged.dependencies {
             dependencies.push(interpolate(dep)?);
         }
+        let mut processor_paths = Vec::with_capacity(merged.annotation_processor_paths.len());
+        for dep in &merged.annotation_processor_paths {
+            processor_paths.push(interpolate(dep)?);
+        }
         let mut management = Vec::with_capacity(merged.dependency_management.len());
         for dep in &merged.dependency_management {
             management.push(interpolate(dep)?);
@@ -210,6 +221,8 @@ impl<'a> PomLoader<'a> {
             dependencies: apply_management(dependencies, &management),
             dependency_management: management,
             repositories: merged.repositories,
+            annotation_processor_paths: processor_paths,
+            annotation_processors: merged.annotation_processors,
         })
     }
 
@@ -427,6 +440,8 @@ struct MergedPom {
     dependencies: Vec<Dependency>,
     dependency_management: Vec<Dependency>,
     repositories: Vec<RawRepository>,
+    annotation_processor_paths: Vec<Dependency>,
+    annotation_processors: Vec<String>,
 }
 
 /// Merge the parent chain into one raw model: the POM under load wins,
@@ -439,6 +454,11 @@ fn merge_chain(chain: &[RawPom]) -> Result<MergedPom, JxError> {
     let mut deps = OrderedMap::default();
     let mut management = OrderedMap::default();
     let mut repositories: Vec<RawRepository> = Vec::new(); // parents first, child last
+    // Compiler-plugin processor configuration: an ancestor's list applies
+    // until a POM declares its own non-empty one (Maven merges configuration
+    // element by element; this is the conservative reading of that rule).
+    let mut processor_paths: Vec<Dependency> = Vec::new();
+    let mut processor_names: Vec<String> = Vec::new();
 
     for pom in chain {
         for (name, value) in &pom.properties {
@@ -448,12 +468,6 @@ fn merge_chain(chain: &[RawPom]) -> Result<MergedPom, JxError> {
                 properties.push((name.clone(), value.clone()));
             }
         }
-        for dep in &pom.dependencies {
-            deps.upsert(dep);
-        }
-        for dep in &pom.dependency_management {
-            management.upsert(dep);
-        }
         for repo in &pom.repositories {
             if !repositories
                 .iter()
@@ -461,6 +475,37 @@ fn merge_chain(chain: &[RawPom]) -> Result<MergedPom, JxError> {
             {
                 repositories.push(repo.clone());
             }
+        }
+        for plugin in &pom.plugins {
+            let group = plugin
+                .group_id
+                .as_deref()
+                .unwrap_or("org.apache.maven.plugins");
+            if group != "org.apache.maven.plugins" || plugin.artifact_id != "maven-compiler-plugin"
+            {
+                continue;
+            }
+            if !plugin.annotation_processor_paths.is_empty() {
+                processor_paths = plugin.annotation_processor_paths.clone();
+            }
+            if !plugin.annotation_processors.is_empty() {
+                processor_names = plugin.annotation_processors.clone();
+            }
+        }
+    }
+
+    // Dependencies and management merge child-first with first-wins: a
+    // POM's whole list outranks every ancestor's (Maven inheritance), while
+    // a duplicate `group:artifact` inside one POM keeps its first
+    // declaration (Maven warns on the duplicate; real POMs like
+    // logback-classic redeclare compile deps as test-scoped later, and the
+    // later entry must not demote the transitive graph).
+    for pom in chain.iter().rev() {
+        for dep in &pom.dependencies {
+            deps.insert_first(dep);
+        }
+        for dep in &pom.dependency_management {
+            management.insert_first(dep);
         }
     }
 
@@ -470,11 +515,15 @@ fn merge_chain(chain: &[RawPom]) -> Result<MergedPom, JxError> {
         dependencies: deps.raise(),
         dependency_management: management.raise(),
         repositories,
+        annotation_processor_paths: processor_paths,
+        annotation_processors: processor_names,
     })
 }
 
-/// Insertion-ordered overwrite map keyed by `group:artifact` (Maven's
-/// dependency key): a child's entry replaces an ancestor's whole entry.
+/// Insertion-ordered map keyed by `group:artifact` (Maven's dependency
+/// key): the first inserted entry wins. Callers insert child-first, so a
+/// child's entry outranks every ancestor's, while duplicates inside one
+/// POM keep their first declaration.
 #[derive(Default)]
 struct OrderedMap {
     entries: Vec<Entry>,
@@ -486,14 +535,13 @@ struct Entry {
 }
 
 impl OrderedMap {
-    fn upsert(&mut self, dep: &Dependency) {
+    fn insert_first(&mut self, dep: &Dependency) {
         let key = format!("{}:{}", dep.group_id, dep.artifact_id);
-        match self.entries.iter().position(|e| e.key == key) {
-            Some(index) => self.entries[index].dependency = dep.clone(),
-            None => self.entries.push(Entry {
+        if !self.entries.iter().any(|e| e.key == key) {
+            self.entries.push(Entry {
                 key,
                 dependency: dep.clone(),
-            }),
+            });
         }
     }
 
@@ -834,9 +882,58 @@ mod tests {
             dependencies: Vec::new(),
             dependency_management: Vec::new(),
             repositories: Vec::new(),
+            plugins: Vec::new(),
             distribution_url: None,
             source_text: String::new(),
         }
+    }
+
+    #[test]
+    fn compiler_plugin_processor_paths_inherit_until_a_child_declares_its_own() {
+        let mut parent = pom(Some("com.example"), "parent", Some("1.0"));
+        parent.plugins.push(crate::xml::RawPlugin {
+            group_id: None,
+            artifact_id: "maven-compiler-plugin".into(),
+            annotation_processor_paths: vec![Dependency {
+                group_id: "org.projectlombok".into(),
+                artifact_id: "lombok".into(),
+                version: Some("1.18.36".into()),
+                package_type: None,
+                classifier: None,
+                scope: None,
+                optional: false,
+                exclusions: Vec::new(),
+            }],
+            annotation_processors: vec!["LombokProcessor".into()],
+        });
+        let child = pom(Some("com.example"), "app", Some("1.0"));
+        let merged = merge_chain(&[parent.clone(), child]).expect("merge");
+        assert_eq!(merged.annotation_processor_paths.len(), 1);
+        assert_eq!(merged.annotation_processor_paths[0].artifact_id, "lombok");
+
+        let mut child = pom(Some("com.example"), "app", Some("1.0"));
+        child.plugins.push(crate::xml::RawPlugin {
+            group_id: Some("org.apache.maven.plugins".into()),
+            artifact_id: "maven-compiler-plugin".into(),
+            annotation_processor_paths: vec![Dependency {
+                group_id: "org.mapstruct".into(),
+                artifact_id: "mapstruct-processor".into(),
+                version: Some("1.6.3".into()),
+                package_type: None,
+                classifier: None,
+                scope: None,
+                optional: false,
+                exclusions: Vec::new(),
+            }],
+            annotation_processors: Vec::new(),
+        });
+        let merged = merge_chain(&[parent, child]).expect("merge");
+        assert_eq!(
+            merged.annotation_processor_paths[0].artifact_id,
+            "mapstruct-processor"
+        );
+        // A child that declares no <annotationProcessors> keeps the parent's list.
+        assert_eq!(merged.annotation_processors, vec!["LombokProcessor"]);
     }
 
     fn coords(g: &str, a: &str, v: &str) -> Coords {
@@ -1121,10 +1218,37 @@ mod tests {
         assert_eq!(
             merged.dependencies[0].version.as_deref(),
             Some("2"),
-            "the later (child) entry replaces the ancestor's whole entry"
+            "the child's entry outranks the ancestor's whole entry"
         );
         // Management and dependencies are separate tables.
         assert!(merged.dependency_management.is_empty());
+    }
+
+    #[test]
+    fn duplicate_declarations_in_one_pom_keep_the_first() {
+        // Real POMs redeclare a compile dependency as test-scoped later in
+        // the same file (logback-classic does exactly this); the later
+        // entry must not demote the dependency out of the transitive graph.
+        let mut only = pom(Some("g"), "only", Some("1"));
+        for (version, scope) in [("1", None), ("1", Some("test"))] {
+            only.dependencies.push(crate::xml::Dependency {
+                group_id: "g".to_string(),
+                artifact_id: "dep".to_string(),
+                version: Some(version.to_string()),
+                package_type: None,
+                classifier: None,
+                scope: scope.map(str::to_string),
+                optional: false,
+                exclusions: Vec::new(),
+            });
+        }
+        let merged = merge_chain(&[only]).expect("one pom");
+        assert_eq!(merged.dependencies.len(), 1);
+        assert_eq!(
+            merged.dependencies[0].scope.as_deref(),
+            None,
+            "the first declaration wins within one POM"
+        );
     }
 
     #[test]

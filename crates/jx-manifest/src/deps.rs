@@ -79,6 +79,40 @@ pub fn parse_tables(
     Ok((deps, dev_deps))
 }
 
+/// Parse `[processors]`: annotation-processor jars and their transitive
+/// dependencies. The table shares the dependency grammar, but every entry
+/// must name a concrete version: a processor path cannot be filled from a
+/// BOM in another table, and `{ platform = … }` would put a POM where javac
+/// expects a jar (ADR 0014).
+pub fn parse_processors(root: &toml::Table, path: &Path) -> Result<Vec<DependencySpec>, JxError> {
+    let specs = parse_table("processors", root, path)?;
+    for spec in &specs {
+        if spec.platform {
+            return Err(JxError::new(
+                Kind::Manifest,
+                format!(
+                    "`{}` in [processors] is a platform entry",
+                    spec.alias
+                ),
+            )
+            .at(path.display().to_string())
+            .hint("annotation processors are jars: give each one a version, e.g. `org.mapstruct:mapstruct-processor:1.6.3`"));
+        }
+        if spec.wanted.is_none() {
+            return Err(JxError::new(
+                Kind::Manifest,
+                format!(
+                    "`{}` in [processors] declares no version",
+                    spec.alias
+                ),
+            )
+            .at(path.display().to_string())
+            .hint("a processor needs an explicit version; BOM-supplied versions are not resolved for [processors]"));
+        }
+    }
+    Ok(specs)
+}
+
 fn parse_table(
     name: &str,
     root: &toml::Table,
@@ -528,6 +562,74 @@ bad = { platform = "g:a:2.0-snapshot" }
             parse("[dependencies]\none = \"g:a:1\"\n\n[dev-dependencies]\none = \"g:a:5\"\n")
                 .expect("two tables are separate");
         assert_eq!(dev.len(), 1);
+    }
+
+    fn processors_of(toml_text: &str) -> Result<Vec<DependencySpec>, JxError> {
+        let value: toml::Table = toml::from_str(toml_text).expect("test TOML");
+        parse_processors(&value, &PathBuf::from("project.toml"))
+    }
+
+    #[test]
+    fn processors_parse_like_dependencies() {
+        let specs = processors_of(
+            r#"
+[processors]
+mapstruct = "org.mapstruct:mapstruct-processor:1.6.3"
+lombok = "org.projectlombok:lombok:=1.18.36"
+"#,
+        )
+        .expect("parsed");
+        assert_eq!(specs.len(), 2);
+        let mapstruct = specs
+            .iter()
+            .find(|spec| spec.alias == "mapstruct")
+            .expect("mapstruct parsed");
+        assert_eq!(mapstruct.group_id, "org.mapstruct");
+        assert_eq!(
+            mapstruct.wanted.as_ref(),
+            Some(&WantedVersion::Prefix("1.6.3".into()))
+        );
+        assert!(!mapstruct.platform);
+    }
+
+    #[test]
+    fn processors_need_an_explicit_version() {
+        let error =
+            processors_of("[processors]\nmapstruct = \"org.mapstruct:mapstruct-processor\"\n")
+                .expect_err("no version");
+        assert!(error.message.contains("declares no version"), "{error}");
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("explicit version")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn processors_reject_platform_entries() {
+        let error = processors_of(
+            "[processors]\nbom = { platform = \"org.mapstruct:mapstruct-bom:1.6.3\" }\n",
+        )
+        .expect_err("a BOM is not a processor jar");
+        assert!(error.message.contains("is a platform entry"), "{error}");
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("jars")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn processors_reject_duplicate_coordinates() {
+        let error = processors_of(
+            "[processors]\none = \"org.mapstruct:mapstruct-processor:1.6.3\"\ntwo = \"org.mapstruct:mapstruct-processor:1.6.4\"\n",
+        )
+        .expect_err("same coordinate twice");
+        assert!(error.message.contains("`two` in [processors]"), "{error}");
     }
 
     fn overrides_of(toml_text: &str) -> Result<Vec<OverrideSpec>, JxError> {

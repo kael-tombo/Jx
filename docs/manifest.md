@@ -9,7 +9,7 @@ named milestone, and **planned** = not yet read at all.
 name = "myapp"                             # required; folder legal name
 version = "0.1.0"                          # required
 jdk = "21"                                 # required; feature release pin;
-                                           # exact-build locking is not written yet
+                                           # exact release is recorded in jx.lock
 
 [dependencies]                             # parsed, validated and resolved
 guava = "com.google.guava:guava:33"        # alias = groupId:artifactId[:version]
@@ -21,8 +21,10 @@ jackson-databind = "com.fasterxml.jackson.core:jackson-databind" # version from 
 junit = "org.junit.platform:junit-platform-console-standalone:1"
                                            # jx test's launcher; bundles Jupiter
 
-[processors]                               # planned (deferred from M4): annotation processors
-mapstruct = "org.mapstruct:mapstruct-processor:1"
+[processors]                               # parsed, validated and resolved (M4)
+mapstruct = "org.mapstruct:mapstruct-processor:1.6.3"
+                                           # jars for javac's -processorpath;
+                                           # every entry needs a version
 
 [overrides]                                # parsed & validated; applied by the resolver
 "org.slf4j:slf4j-api" = "2.0.16"           # keys are group:artifact; values pin exactly
@@ -36,6 +38,12 @@ main = "com.acme.App"                      # optional; else discovered post-buil
 
 [build]                                    # parsed & validated (M7)
 engine = "maven"                           # "jx" (default), "maven" or "gradle"
+
+[package]                                  # parsed & validated (V1)
+framework = "spring-boot"                  # "plain" (default), "spring-boot",
+                                           # "micronaut", "vertx", "javafx",
+                                           # "quarkus", "jakarta-ee"
+                                           # (also "javaee", "j2ee")
 ```
 
 ## Rules (target)
@@ -47,6 +55,10 @@ engine = "maven"                           # "jx" (default), "maven" or "gradle"
   Pre-releases (alpha, beta, rc, milestone) are excluded unless pinned
   exactly. SNAPSHOT versions are rejected with a clear message.
 * A `platform` entry is a BOM supplying versions to entries without one.
+* `[processors]` shares the dependency grammar but is a separate graph:
+  entries are annotation-processor jars (plus their transitive dependencies)
+  and must name an explicit version. A processor cannot be a `platform` BOM:
+  javac needs jars on its processor path, not a POM.
 * `[overrides]` entries override one artifact everywhere in the graph;
   values are exact pins (a leading `=` is accepted but has the same
   meaning); a table may not override the same artifact twice. Overrides
@@ -72,6 +84,18 @@ engine = "maven"                           # "jx" (default), "maven" or "gradle"
   `[dependencies]` reach the main compile/run classpath; `[dev-dependencies]`
   reach test compilation and `jx test` only. An artifact shared by both
   scopes counts as main.
+* `[processors]` entries are parsed and validated at manifest parse time with
+  the dependency rules above, plus: every entry needs an explicit version and
+  `{ platform = … }` is rejected. The processor graph resolves separately from
+  the app graph (same nearest-wins rules, same `[overrides]`), and its jars
+  reach javac's `-processorpath` for both main and test compilation. A GA that
+  appears in both graphs at different versions makes `jx lock` fail with an
+  override hint, because one lockfile records one version per GA; the same
+  version in both roles is one shared entry. `jx add --processor` and
+  `jx remove --processor` edit the table; `jx tree` prints a processor
+  section, and `jx why` checks both graphs, labeling processor paths and
+  showing both when one artifact serves both roles. See
+  [decisions/0014-annotation-processors.md](decisions/0014-annotation-processors.md).
 * `[overrides]` entries are parsed and validated the same way (quoted
   `group:artifact` keys, version values, no duplicates, no SNAPSHOTs;
   a leading `=` is allowed but optional — override values pin either way).
@@ -88,8 +112,12 @@ engine = "maven"                           # "jx" (default), "maven" or "gradle"
 * `jx import` (Maven) writes direct dependencies as exact (`=version`) pins
   using the versions the effective POM resolved, puts test-scope dependencies
   in `[dev-dependencies]`, and does not write platform entries for imported
-  BOMs (their effect is already in the pins). It does not migrate exclusions,
-  system-scope dependencies, plugin configuration or POM repositories; see
+  BOMs (their effect is already in the pins). It sets `[package] framework`
+  from the dependency groups (`org.springframework.boot`, `io.quarkus`,
+  `io.micronaut`, `io.vertx`, `org.openjfx`, `jakarta.platform`) and says so
+  in the import notes; test-only dependencies never trigger this. It does
+  not migrate exclusions, system-scope dependencies, plugin configuration or
+  POM repositories; see
   [decisions/0010-maven-import.md](decisions/0010-maven-import.md).
 * `jx import` (Gradle) reads the declarative subset of `build.gradle` /
   `build.gradle.kts`: literal coordinates, `platform(...)` BOMs (written as
@@ -97,8 +125,21 @@ engine = "maven"                           # "jx" (default), "maven" or "gradle"
   literal `ext`/`def`/`val` variables, the Java toolchain and the application
   main class. Versionless dependencies rely on a platform entry; the Spring
   Boot plugin's literal version adds `spring-boot-dependencies` as that
-  platform. Anything requiring script evaluation is refused. See
+  platform. Like the Maven path, it sets `[package] framework` from the
+  dependency groups and reports it in the import notes. Anything requiring
+  script evaluation is refused. See
   [decisions/0011-gradle-interop.md](decisions/0011-gradle-interop.md).
+* `jx import` (jot) reads a Java-only, single-module `jot.toml`: `[project]
+  name`, `version` and `main-class`, the `[toolchains] java` pin, and
+  `[dependencies]`/`[test-dependencies]`/`[processors]` coordinates,
+  including `{ catalog = … }` entries resolved from the nearest
+  `libs.versions.toml` (project or workspace root). It exact-pins direct
+  dependencies and processors, and refuses
+  workspaces, path dependencies, a Kotlin toolchain and a non-Temurin JDK
+  vendor. jot's default flat layout (including an omitted `layout`) is
+  imported with a note that `src/`, `test/` and `res/` must move to the Maven
+  layout; `[publish]` and `[project] group` are not imported. See
+  [decisions/0016-jot-import.md](decisions/0016-jot-import.md).
 * `jx export gradle` uses the locked versions: `[dependencies]` become
   `implementation`, `[dev-dependencies]` become `testImplementation`,
   `[overrides]` become `constraints`, `[run] main` selects the `application`
@@ -111,3 +152,25 @@ engine = "maven"                           # "jx" (default), "maven" or "gradle"
   dependency resolution, compilation and packaging; pass `--engine jx` to use
   the manifest's graph for one command. See
   [decisions/0012-delegated-builds.md](decisions/0012-delegated-builds.md).
+* `[package]` has one key, `framework`, one of `"plain"` (the default),
+  `"spring-boot"`, `"micronaut"`, `"vertx"`, `"javafx"`, `"quarkus"` or
+  `"jakarta-ee"` (`"javaee"` and `"j2ee"` are accepted as aliases).
+  `"spring-boot"` writes the Boot 3.2-and-later executable layout
+  (`BOOT-INF/classes`, `BOOT-INF/lib`, loader at the archive root, including
+  Boot 4) and needs `org.springframework.boot:spring-boot-loader` on the
+  runtime classpath at the app's Boot version. Boot 4 additionally needs JDK
+  17 or newer. `"micronaut"` selects the merged fat jar and warns when
+  `[processors]` does not contain `io.micronaut:micronaut-inject-java`.
+  `"vertx"` selects the merged fat jar launched through the locked Vert.x
+  launcher: Vert.x 5 uses `io.vertx:vertx-launcher-application` and records
+  `Main-Verticle`, while Vert.x 3/4 uses `io.vertx.core.Launcher` with its
+  `run` command. `"javafx"` writes a portable thin jar for a separate
+  launcher class; the `Application` subclass itself cannot be launched from
+  the classpath, and only one platform classifier may be present.
+  `"quarkus"` and `"jakarta-ee"` are refused by `jx package` because
+  Quarkus generates its layout while augmenting and a WAR needs
+  container-provided APIs (jx has no `provided` scope). `jx run` is likewise
+  refused for Quarkus, and `jx export` cannot reproduce a launcher-based
+  Vert.x entry. See [decisions/0018-framework-packaging.md](decisions/0018-framework-packaging.md),
+  [decisions/0019-framework-launch.md](decisions/0019-framework-launch.md) and
+  [decisions/0020-import-framework-detection.md](decisions/0020-import-framework-detection.md).

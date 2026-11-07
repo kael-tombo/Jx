@@ -33,8 +33,8 @@ owns the work and calls it well.
 | Compilation, tests, linking | the pinned JDK (`javac`, JUnit, `jdeps`, `jlink`) | orchestrate, fingerprint, report; never reimplement the compiler or launcher |
 | Build lifecycle | jx, or Maven/Gradle when `[build] engine` delegates | own the jx path, or plan and run the external tool with the pinned JDK (ADR 0012) |
 | JDK installation | Eclipse Temurin over the Adoptium API today; the platform's installer in general | resolve, verify and install into jx's own store; never modify a system Java installation |
-| OS-level installation | Chocolatey, Homebrew, Scoop, the platform installer | do not wrap or replace them; document them as the owner |
-| Scripts and single-file programs | JBang (after V1) | not implemented in V1; do not grow a jx script runner |
+| OS-level installation | Chocolatey, Homebrew, Scoop, winget and the platform installer | generate release manifests where useful; do not wrap or replace the managers (ADR 0017) |
+| Scripts and single-file programs | JBang | delegate through `jx script`; do not grow a jx script runner or absorb `//DEPS` (ADR 0015) |
 | Runtime | the JDK | optional `jlink` image packaging (ADR 0009); jx is not a runtime |
 
 The resolver is the deliberate exception that proves the rule. jx does not run
@@ -98,12 +98,22 @@ An external tool may be integrated only when all of these hold:
 * Maven/Gradle delegation (ADR 0012) is the first implemented adapter and the
   template for later ones: explicit selection, diagnosed absence, tool-owned
   exit code, fake-tested in CI.
-* JBang and OS-installer adapters are **after V1**. They are named in the
-  roadmap and this record so the boundary is visible; nothing claims they are
-  wired.
+* The post-V1 adapters follow that shape: JBang scripts (`jx script`, ADR
+  0015), `jot.toml` import (ADR 0016), and release-generated OS package
+  manifests (ADR 0017). The winget manifests were also checked with Microsoft's
+  validator; the other package managers keep their own submission review.
 * A future adapter needs a new ADR (or an amendment here) describing what the
   tool owns, how absence is diagnosed, and how it is tested. Adding one is a
   deliberate product decision, not a refactor.
 * jx stays a single binary with no runtime dependencies, and the happy path
   stays small. The cost is that some workflows need the other tool installed;
   that is the intended trade, not a gap to paper over with a partial clone.
+
+## Amendment (2026-11-01)
+
+The post-V1 adapter work is implemented under the ownership table and rules
+above. `jx script` delegates to JBang (ADR 0015); `jx import` reads Java-only
+`jot.toml` projects (ADR 0016); and the release workflow generates Chocolatey,
+Homebrew, Scoop and winget manifests while leaving installation and upgrades
+to those package managers (ADR 0017). jx still does not install a JDK through
+an OS package manager, bundle a runtime, or publish itself to a package feed.

@@ -45,10 +45,17 @@ Kotlin-DSL build;
 which commands are refused, and why;
 [decisions/0013-compose-the-ecosystem.md](decisions/0013-compose-the-ecosystem.md)
 — the ownership table and adapter rules that keep jx a workflow layer rather
-than a package manager, runtime or build tool. [quickstart.md](quickstart.md)
-is the executable user path; [security-checklist.md](security-checklist.md)
-records the extraction, checksum, TLS and injection review;
-[RELEASING.md](RELEASING.md) is the version/tag/verification procedure.
+than a package manager, runtime or build tool;
+[decisions/0015-jbang-script-adapter.md](decisions/0015-jbang-script-adapter.md)
+— the delegated `jx script` path;
+[decisions/0016-jot-import.md](decisions/0016-jot-import.md) — the partial,
+one-way `jot.toml` import; and
+[decisions/0017-os-package-manifests.md](decisions/0017-os-package-manifests.md)
+— Chocolatey, Homebrew, Scoop and winget manifests generated at release time.
+[quickstart.md](quickstart.md) is the executable user path;
+[security-checklist.md](security-checklist.md) records the extraction,
+checksum, TLS and injection review; [RELEASING.md](RELEASING.md) is the
+version/tag/verification procedure.
 
 Build/test (M4), packaging (M5) and runtime-image (M6) behaviour is described
 in the README quickstart and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md); no
@@ -69,7 +76,7 @@ jx/
     jx-build/       # javac, fingerprints, test running
     jx-package/     # jar, dist layout, jdeps/jlink and Maven export
     jx-run/         # Runner trait, plain-main runner
-    jx-interop/     # Maven and Gradle import and delegated builds
+    jx-interop/     # Maven, Gradle and jot import; JBang and delegated builds
     jx-testsupport/ # fake repository server, fixtures, differential harness
   docs/  public/  scripts/  tests/
 ```
@@ -84,15 +91,19 @@ milestones; nothing in this repository claims to support them yet.
 | M0 | Workspace, CI, ADRs, docs skeleton, config/cache, error framework, `jx --version`, `jx doctor` | done |
 | M1 | `jx jdk`, `jx new`, minimal `build`/`run`, offline hello | **done** |
 | M2 | Repository client, cache, checksums, proxy/mirror, POM model, version ordering | done |
-| M3 | Resolver: add/remove/tree/why/lock/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
-| M4 | javac integration, fingerprint skip, resources, JUnit launcher | **done** — annotation processors deferred |
+| M3 | Resolver: add/remove/tree/why/lock/update/fetch, conflict policy, lock fast path | **done** — commands, lockfile, classpath fast path |
+| M4 | javac integration, fingerprint skip, resources, JUnit launcher, annotation processors | **done** — `[processors]` runs javac with `-processorpath` (ADR 0014) |
 | M5 | Run and package: main discovery, debug, dist, fat jar, `export maven` | **done** — POM export is an approximation (ADR 0007) |
 | M6 | Runtime trimming: jdeps + jlink with fallback | **done** — `jx image`, verified and atomic; reflection risk documented |
 | M7 | Maven and Gradle interop: import, compatibility, delegate, exports | **done** — `jx import` (Maven + Gradle), `jx export maven/gradle` and delegated `build`/`test`/`clean` via `[build] engine` or `--engine`; ADRs 0010–0012 |
 | M8 | Release hardening: docs, install script, security checklist | **done** — release workflow, checksummed installers, security review; owner sign-off and signing remain |
 
-After V1, optional adapters may hand scripts to JBang and OS installs to
-Chocolatey, Homebrew or Scoop; both are deliberately absent today (ADR 0013).
+Post-V1 adapters now live beside the core: `jx script` hands scripts to JBang
+(ADR 0015), `jx import` reads Java-only `jot.toml` projects (ADR 0016), and the
+release workflow generates Chocolatey, Homebrew, Scoop and winget manifests
+(ADR 0017). OS installs themselves still belong to those package managers;
+the generated manifests are release artifacts and are not submitted
+automatically.
 
 Items requiring verification against live documentation before implementation
 are collected in the brief (section 15); the relevant ADR records the verified

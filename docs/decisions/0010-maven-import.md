@@ -70,9 +70,15 @@ without writing, and `--force` is required to replace an existing manifest.
   BOMs were expanded.
 * POM `<repositories>` are not migrated: jx only trusts `config.toml`
   (ADR 0003). The note lists their ids.
-* Exclusions, optionality, Maven plugin configuration, resource directories,
-  annotation processors and `module-info` handling are not migrated. Notes
-  say which of these applied.
+* Exclusions, optionality, Maven plugin configuration, resource directories
+  and `module-info` handling are not migrated. Notes say which of these
+  applied.
+* `maven-compiler-plugin`'s `<annotationProcessorPaths>` is the one plugin
+  setting that is read: each `<path>` with an explicit version becomes a
+  `[processors]` entry, inherited through the parent chain until a POM
+  declares its own list. jx runs every processor on the path, so
+  `<annotationProcessors>` narrowing, processor `<arguments>` and
+  `<executions>` are reported rather than reproduced.
 * The generated text is parsed with the same `jx-manifest` validator used by
   every other command before it is written. A validation failure is a jx bug
   and is reported as such; nothing is written.

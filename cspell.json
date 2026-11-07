@@ -11,6 +11,7 @@
     "Homebrew",
     "JBang",
     "javac",
+    "javafx",
     "jdeps",
     "JDK",
     "JDKs",
@@ -36,7 +37,10 @@
     "toolchain",
     "toolchains",
     "Vert",
-    "WCAG"
+    "verticle",
+    "verticles",
+    "WCAG",
+    "winget"
   ],
   "ignoreRegExpList": [
     "/\\{\\{TODO[^}]*\\}\\}/g",

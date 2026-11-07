@@ -16,6 +16,9 @@ use crate::deps::{DependencySpec, WantedVersion};
 pub enum DepTable {
     Dependencies,
     DevDependencies,
+    /// Annotation-processor jars (ADR 0014); same entry grammar as the
+    /// dependency tables.
+    Processors,
 }
 
 impl DepTable {
@@ -23,6 +26,7 @@ impl DepTable {
         match self {
             DepTable::Dependencies => "dependencies",
             DepTable::DevDependencies => "dev-dependencies",
+            DepTable::Processors => "processors",
         }
     }
 }

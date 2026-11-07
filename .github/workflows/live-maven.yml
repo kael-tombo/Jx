@@ -1,0 +1,40 @@
+name: Live Maven Central
+
+# Normal CI is hermetic. This workflow deliberately reaches Maven Central to
+# catch repository-client regressions; it runs weekly and on demand, never on
+# pull requests. Windows covers the MSVC release ABI while Linux stays the
+# default developer build.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * 1" # Mondays at 04:23 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-maven-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  live-maven:
+    name: why / lock / offline fetch (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: live-maven-${{ matrix.os }}
+      - name: Live Maven Central smoke test
+        run: cargo test -p jx-cli --test live_maven --locked -- --ignored --nocapture

@@ -8,7 +8,7 @@ use jx_common::error::{JxError, Kind};
 use jx_common::paths;
 
 use crate::extract;
-use crate::provider::{JdkProvider as _, Temurin};
+use crate::provider::{JdkProvider as _, Temurin, release_feature};
 
 /// A JDK installed by jx.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +121,49 @@ pub fn installed_for_feature(home: &Path, feature: u32) -> Result<Option<Install
     Ok(best)
 }
 
+/// The installed JDK matching an exact provider release, if any.
+pub fn installed_exact(
+    home: &Path,
+    vendor: &str,
+    release: &str,
+) -> Result<Option<InstalledJdk>, JxError> {
+    Ok(list_installed(home)?
+        .into_iter()
+        .find(|jdk| jdk.vendor == vendor && jdk.version == release))
+}
+
+/// A cached JDK install archive for `version`, if one is present. The
+/// extension depends on the platform and provider, so match the version
+/// prefix rather than guessing the suffix.
+pub fn cached_archive(home: &Path, version: &str) -> Result<Option<PathBuf>, JxError> {
+    let dir = home.join("cache").join("jdks");
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let prefix = format!("{version}.");
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| {
+        JxError::new(Kind::Io, "cannot list the cached JDK archives")
+            .at(dir.display().to_string())
+            .caused_by(e)
+    })? {
+        let path = entry
+            .map_err(|e| {
+                JxError::new(Kind::Io, "cannot list the cached JDK archives").caused_by(e)
+            })?
+            .path();
+        if path.is_file()
+            && path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(&prefix))
+        {
+            found.push(path);
+        }
+    }
+    found.sort();
+    Ok(found.into_iter().next())
+}
+
 /// Install (or return cached) JDK for `feature`, streaming progress text.
 pub fn ensure_jdk(home: &Path, feature: u32) -> Result<InstalledJdk, JxError> {
     if let Some(found) = installed_for_feature(home, feature)? {
@@ -151,6 +194,148 @@ pub fn ensure_jdk(home: &Path, feature: u32) -> Result<InstalledJdk, JxError> {
     }
     extract::extract_jdk(&archive, &jdks_dir(home), &format!("temurin-{version}"))?;
     ensure_jdk(home, feature)
+}
+
+/// Restore a specific Temurin release recorded in `jx.lock`. Unlike
+/// [`ensure_jdk`], this never substitutes a newer build of the same feature.
+/// A matching installed JDK or cached archive is used without touching the
+/// network; `--offline` refuses only when neither exists.
+pub fn ensure_jdk_release(
+    home: &Path,
+    provider: &str,
+    feature: u32,
+    release: &str,
+    expected_sha256: &str,
+    offline: bool,
+) -> Result<InstalledJdk, JxError> {
+    if provider != "temurin" {
+        return Err(JxError::new(
+            Kind::Toolchain,
+            format!("jx.lock pins provider `{provider}`, which this jx does not install"),
+        )
+        .hint("V1 installs Eclipse Temurin only; change the pin deliberately"));
+    }
+    if !is_sha256(expected_sha256) {
+        return Err(JxError::new(
+            Kind::Lock,
+            "the [jdk] checksum in jx.lock is not a 64-character sha256",
+        )
+        .at("jx.lock")
+        .hint("remove the [jdk] entry and re-lock, or restore a valid jx.lock"));
+    }
+    let version = exact_release_version(release)?;
+    if release_feature(&version) != Some(feature) {
+        return Err(JxError::new(
+            Kind::Lock,
+            format!("jx.lock pins JDK {feature}, but release `{version}` is a different feature"),
+        )
+        .at("jx.lock")
+        .hint("remove the [jdk] entry and re-lock, or restore a valid jx.lock"));
+    }
+    if let Some(found) = installed_exact(home, provider, &version)? {
+        return Ok(found);
+    }
+
+    if let Some(archive) = cached_archive(home, &version)? {
+        let actual = extract::sha256_file(&archive)?;
+        if actual.eq_ignore_ascii_case(expected_sha256) {
+            extract::extract_jdk(&archive, &jdks_dir(home), &format!("temurin-{version}"))?;
+            return finish_exact_install(home, provider, &version);
+        }
+        std::fs::remove_file(&archive).ok();
+        if offline {
+            return Err(JxError::new(
+                Kind::Toolchain,
+                "the cached JDK archive does not match the checksum pinned in jx.lock",
+            )
+            .at(archive.display().to_string())
+            .hint("the corrupt cache file was removed; run `jx fetch` once online"));
+        }
+    } else if offline {
+        return Err(JxError::new(
+            Kind::Toolchain,
+            format!(
+                "jx.lock pins temurin {version}, which is not installed or cached, and --offline forbids downloading"
+            ),
+        )
+        .hint("run `jx fetch` once online to install the exact locked JDK"));
+    }
+
+    let resolved = Temurin.resolve_exact(feature, &version)?;
+    if resolved.release_name != format!("jdk-{version}") {
+        return Err(JxError::new(
+            Kind::Toolchain,
+            format!(
+                "the provider resolved `{}` instead of the exact locked release",
+                resolved.release_name
+            ),
+        )
+        .at(version));
+    }
+    if !resolved.sha256.eq_ignore_ascii_case(expected_sha256) {
+        return Err(JxError::new(
+            Kind::Toolchain,
+            format!("the provider's checksum for temurin {version} does not match jx.lock"),
+        )
+        .at(version)
+        .hint("the archive may have been replaced; re-lock deliberately if that is expected"));
+    }
+
+    let archive = home
+        .join("cache")
+        .join("jdks")
+        .join(format!("{version}.{}", resolved.archive_extension));
+    std::fs::create_dir_all(archive.parent().expect("archive has a parent")).map_err(|e| {
+        JxError::new(Kind::Io, "cannot create the JDK archive cache directory")
+            .at(archive.display().to_string())
+            .caused_by(e)
+    })?;
+    if archive.exists() {
+        verify_cached_archive(&archive, expected_sha256)?;
+    } else {
+        extract::download(
+            &resolved.url,
+            &archive,
+            expected_sha256,
+            resolved.size,
+            &format!("temurin {version}"),
+        )?;
+    }
+    extract::extract_jdk(&archive, &jdks_dir(home), &format!("temurin-{version}"))?;
+    finish_exact_install(home, provider, &version)
+}
+
+fn exact_release_version(release: &str) -> Result<String, JxError> {
+    if release.is_empty() || release.starts_with("jdk-") || !extract::entry_path_is_safe(release) {
+        return Err(
+            JxError::new(Kind::Toolchain, "refusing an unsafe exact JDK release name")
+                .at(release)
+                .hint("remove the [jdk] entry and re-lock, or restore a valid jx.lock"),
+        );
+    }
+    Ok(release.to_string())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn finish_exact_install(
+    home: &Path,
+    provider: &str,
+    version: &str,
+) -> Result<InstalledJdk, JxError> {
+    installed_exact(home, provider, version)?.ok_or_else(|| {
+        JxError::new(
+            Kind::Internal,
+            "the JDK was extracted but is not visible in the jx store",
+        )
+        .at(jdks_dir(home)
+            .join(format!("temurin-{version}"))
+            .display()
+            .to_string())
+        .hint("retry; if it persists, remove the partial directory and run `jx fetch`")
+    })
 }
 
 /// Re-verify a cached archive before reuse: the checksum gate stays closed.
@@ -204,6 +389,103 @@ pub fn default_home() -> Result<PathBuf, JxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    use std::io::Write as _;
+
+    fn write_fake_jdk_archive(path: &Path) {
+        #[cfg(windows)]
+        {
+            let file = std::fs::File::create(path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .unix_permissions(0o755);
+            zip.start_file("jdk-25.0.5+8/bin/java.exe", options)
+                .unwrap();
+            zip.write_all(b"fake").unwrap();
+            zip.finish().unwrap();
+        }
+        #[cfg(not(windows))]
+        {
+            let file = std::fs::File::create(path).unwrap();
+            let gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+            let mut tar = tar::Builder::new(gz);
+            let mut header = tar::Header::new_gnu();
+            header.set_path("jdk-25.0.5+8/bin/java").unwrap();
+            header.set_size(4);
+            header.set_mode(0o755);
+            header.set_cksum();
+            tar.append(&header, &b"fake"[..]).unwrap();
+            let gz = tar.into_inner().unwrap();
+            gz.finish().unwrap();
+        }
+    }
+
+    #[test]
+    fn exact_release_installs_from_a_verified_cache_offline() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("cache").join("jdks");
+        std::fs::create_dir_all(&cache).unwrap();
+        let archive = cache.join(format!("25.0.5+8.{}", crate::provider::archive_extension()));
+        write_fake_jdk_archive(&archive);
+        let checksum = extract::sha256_file(&archive).unwrap();
+
+        let jdk =
+            ensure_jdk_release(dir.path(), "temurin", 25, "25.0.5+8", &checksum, true).unwrap();
+        assert_eq!(jdk.version, "25.0.5+8");
+        assert!(jdk.java().is_file());
+        assert!(archive.is_file());
+    }
+
+    #[test]
+    fn exact_release_offline_without_cache_is_actionable() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = ensure_jdk_release(dir.path(), "temurin", 25, "25.0.5+8", &"a".repeat(64), true)
+            .unwrap_err();
+        assert_eq!(err.kind, Kind::Toolchain);
+        assert!(err.message.contains("not installed or cached"), "{err:?}");
+        assert!(
+            err.hint.unwrap_or_default().contains("jx fetch"),
+            "offline hint should name jx fetch"
+        );
+    }
+
+    #[test]
+    fn exact_release_installed_is_returned_without_network() {
+        let dir = tempfile::tempdir().unwrap();
+        let jdk = jdks_dir(dir.path()).join("temurin-25.0.5+8");
+        std::fs::create_dir_all(jdk.join("bin")).unwrap();
+        std::fs::write(jdk.join("release"), "JAVA_VERSION=25").unwrap();
+
+        let found =
+            ensure_jdk_release(dir.path(), "temurin", 25, "25.0.5+8", &"0".repeat(64), true)
+                .unwrap();
+        assert_eq!(found.version, "25.0.5+8");
+    }
+
+    #[test]
+    fn exact_release_rejects_a_feature_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = ensure_jdk_release(dir.path(), "temurin", 21, "25.0.5+8", &"0".repeat(64), true)
+            .unwrap_err();
+        assert_eq!(err.kind, Kind::Lock);
+        assert!(err.message.contains("different feature"), "{err:?}");
+    }
+
+    #[test]
+    fn exact_release_removes_a_mismatched_cache_offline() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("cache").join("jdks");
+        std::fs::create_dir_all(&cache).unwrap();
+        let archive = cache.join(format!("25.0.5+8.{}", crate::provider::archive_extension()));
+        std::fs::write(&archive, b"not the pinned bytes").unwrap();
+
+        let err = ensure_jdk_release(dir.path(), "temurin", 25, "25.0.5+8", &"0".repeat(64), true)
+            .unwrap_err();
+        assert_eq!(err.kind, Kind::Toolchain);
+        assert!(err.message.contains("cached JDK archive"), "{err:?}");
+        assert!(cached_archive(dir.path(), "25.0.5+8").unwrap().is_none());
+    }
 
     #[test]
     fn version_ordering_is_semverish() {
@@ -244,6 +526,48 @@ mod tests {
             "25.0.5+8"
         );
         assert!(foreign.is_dir());
+    }
+
+    #[test]
+    fn exact_lookup_ignores_other_builds() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = jdks_dir(dir.path());
+        let jdk = store.join("temurin-25.0.5+8");
+        std::fs::create_dir_all(jdk.join("bin")).unwrap();
+        std::fs::write(jdk.join("release"), "JAVA_VERSION=25").unwrap();
+
+        assert_eq!(
+            installed_exact(dir.path(), "temurin", "25.0.5+8")
+                .unwrap()
+                .unwrap()
+                .version,
+            "25.0.5+8"
+        );
+        assert!(
+            installed_exact(dir.path(), "temurin", "25.0.5+7")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            installed_exact(dir.path(), "other", "25.0.5+8")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn cached_archive_matches_the_version_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("cache").join("jdks");
+        std::fs::create_dir_all(&cache).unwrap();
+        std::fs::write(cache.join("25.0.5+80.tar.gz"), b"not this one").unwrap();
+        std::fs::write(cache.join("25.0.5+8.tar.gz"), b"this one").unwrap();
+
+        let found = cached_archive(dir.path(), "25.0.5+8")
+            .unwrap()
+            .expect("archive for the exact version");
+        assert_eq!(found.file_name().unwrap(), "25.0.5+8.tar.gz");
+        assert!(cached_archive(dir.path(), "21.0.1").unwrap().is_none());
     }
 
     #[test]

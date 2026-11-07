@@ -145,6 +145,57 @@ fn delegated_build_prefers_the_wrapper_and_exports_the_pinned_jdk() {
 }
 
 #[test]
+fn delegated_build_forwards_tool_arguments_after_the_separator() {
+    let fixture = Fixture::new("maven");
+    std::fs::write(fixture.path().join("pom.xml"), "<project/>\n").unwrap();
+    fixture.write_wrapper("maven", 0);
+
+    let output = fixture.run(&["build", "--", "-DskipTests", "-Pfast"]);
+    assert_success(&output);
+    assert_eq!(fixture.recorded_args(), "-B compile -DskipTests -Pfast");
+}
+
+#[test]
+fn delegated_test_and_clean_forward_their_own_flags() {
+    let fixture = Fixture::new("gradle");
+    std::fs::write(fixture.path().join("build.gradle.kts"), "").unwrap();
+    fixture.write_wrapper("gradle", 0);
+
+    let tested = fixture.run(&["test", "--", "--tests", "app.LibTest"]);
+    assert_success(&tested);
+    assert_eq!(
+        fixture.recorded_args(),
+        "--console=plain test --tests app.LibTest"
+    );
+
+    let cleaned = fixture.run(&["clean", "--", "--refresh-dependencies"]);
+    assert_success(&cleaned);
+    assert_eq!(
+        fixture.recorded_args(),
+        "--console=plain clean --refresh-dependencies"
+    );
+}
+
+#[test]
+fn tool_arguments_are_refused_when_jx_owns_the_build() {
+    let fixture = Fixture::new("jx");
+    let target = fixture.path().join("target");
+    std::fs::create_dir_all(&target).unwrap();
+
+    for command in ["build", "test", "clean"] {
+        let output = fixture.run(&[command, "--", "--parallel"]);
+        assert_eq!(output.status.code(), Some(2), "{command}");
+        let message = stderr(&output);
+        assert!(
+            message.contains("need a delegated build"),
+            "{command}: {message}"
+        );
+        assert!(message.contains("--engine maven"), "{command}: {message}");
+    }
+    assert!(target.is_dir(), "a refused clean must not delete output");
+}
+
+#[test]
 fn delegated_test_and_clean_use_each_engines_own_goal() {
     let fixture = Fixture::new("gradle");
     std::fs::write(fixture.path().join("build.gradle.kts"), "").unwrap();
@@ -252,6 +303,26 @@ fn dependency_commands_and_exports_are_refused_under_delegation() {
             message.contains("delegates its build"),
             "{args:?}: {message}"
         );
+    }
+}
+
+#[test]
+fn test_filters_and_report_dirs_are_refused_under_delegation() {
+    let fixture = Fixture::new("maven");
+    std::fs::write(fixture.path().join("pom.xml"), "<project/>\n").unwrap();
+
+    for args in [
+        vec!["test", "--filter", "app.LibTest"],
+        vec!["test", "--reports-dir", "reports"],
+    ] {
+        let output = fixture.run(&args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        let message = stderr(&output);
+        assert!(
+            message.contains("belong to jx's own test runner"),
+            "{args:?}: {message}"
+        );
+        assert!(message.contains("--engine jx"), "{args:?}: {message}");
     }
 }
 

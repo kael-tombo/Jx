@@ -167,15 +167,43 @@ pub fn resolve(
     dev_dependencies: &[DependencySpec],
     overrides: &[OverrideSpec],
 ) -> Result<Resolution, JxError> {
+    resolve_roots(
+        loader,
+        client,
+        &[(dependencies, false), (dev_dependencies, true)],
+        overrides,
+    )
+}
+
+/// Resolve `[processors]` and its transitive dependencies as a graph of its
+/// own (ADR 0014). Processors are build-time jars: they never share a
+/// classpath with the app graph, and every root here is a main-scoped root.
+pub fn resolve_processors(
+    loader: &PomLoader<'_>,
+    client: &Client,
+    processors: &[DependencySpec],
+    overrides: &[OverrideSpec],
+) -> Result<Resolution, JxError> {
+    resolve_roots(loader, client, &[(processors, false)], overrides)
+}
+
+/// The shared walker: every root table enters at depth 1 and is resolved by
+/// the same nearest-wins rules, whichever graph it belongs to.
+fn resolve_roots(
+    loader: &PomLoader<'_>,
+    client: &Client,
+    roots: &[(&[DependencySpec], bool)],
+    overrides: &[OverrideSpec],
+) -> Result<Resolution, JxError> {
     // ------------------------------------------------------------------
     // 1. Platform BOMs: fetch each as a POM and collect the versions its
     //    consolidated management supplies to the table.
     // ------------------------------------------------------------------
     let mut supplied: HashMap<(String, String), String> = HashMap::new();
     let mut platforms = Vec::new();
-    for spec in dependencies
+    for spec in roots
         .iter()
-        .chain(dev_dependencies.iter())
+        .flat_map(|(specs, _)| specs.iter())
         .filter(|spec| spec.platform)
     {
         let wanted = wanted_of(spec)?;
@@ -215,10 +243,9 @@ pub fn resolve(
         ..Resolution::default()
     };
     let mut queue: VecDeque<Entry> = VecDeque::new();
-    for (spec, dev) in dependencies
+    for (spec, dev) in roots
         .iter()
-        .map(|spec| (spec, false))
-        .chain(dev_dependencies.iter().map(|spec| (spec, true)))
+        .flat_map(|(specs, dev)| specs.iter().map(move |spec| (spec, *dev)))
     {
         if spec.platform {
             continue;

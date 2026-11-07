@@ -203,6 +203,44 @@ pub fn entry_path_is_safe(name: &str) -> bool {
         && !name.chars().any(|c| c.is_control())
 }
 
+/// Validate a symlink target relative to the directory that holds the link.
+///
+/// A target may legitimately contain `..` (Temurin's `legal/` entries point at
+/// `../java.base/ASSEMBLY_EXCEPTION`), so the target is resolved from the
+/// link's parent and kept only if it never climbs above the archive root.
+fn link_target_is_safe(entry: &str, link: &str) -> bool {
+    if link.is_empty()
+        || link.starts_with('/')
+        || link.contains('\\')
+        || link.contains(':')
+        || link.chars().any(|c| c.is_control())
+    {
+        return false;
+    }
+    // The entry path is already validated, so its segments are plain names.
+    let mut depth = entry
+        .split('/')
+        .filter(|seg| !seg.is_empty() && *seg != ".")
+        .count() as i64
+        - 1;
+    if depth < 0 {
+        return false;
+    }
+    for seg in link.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => depth += 1,
+        }
+    }
+    true
+}
+
 /// Extract `archive` (zip on Windows, gzip tarball elsewhere) into a staging
 /// directory under `dest_root`, strip a single top directory, verify the
 /// `bin/java` binary exists, then move the result to
@@ -327,7 +365,12 @@ fn extract_tar_gz(archive: &Path, staging: &Path) -> Result<(), JxError> {
             .caused_by(e)
         })? {
             let link = link.to_string_lossy().into_owned();
-            if !entry_path_is_safe(&link) {
+            let safe = if kind.is_symlink() {
+                link_target_is_safe(&name, &link)
+            } else {
+                entry_path_is_safe(&link)
+            };
+            if !safe {
                 return Err(JxError::new(
                     Kind::Toolchain,
                     "the JDK archive contains a symlink leaving its top directory",
@@ -510,6 +553,23 @@ mod tests {
         for evil in ["a\\b", "C:/x", "a..b/..", "//share", "nul\x00", "a/../b"] {
             assert!(!entry_path_is_safe(evil), "should reject: {evil:?}");
         }
+    }
+
+    #[test]
+    fn symlink_targets_resolve_from_their_directory() {
+        // Temurin's legal/ links look like this and stay inside the JDK.
+        assert!(link_target_is_safe(
+            "jdk-25.0.5+8/legal/jdk.nio.mapmode/ASSEMBLY_EXCEPTION",
+            "../java.base/ASSEMBLY_EXCEPTION"
+        ));
+        assert!(link_target_is_safe("jdk-25.0.5+8/bin/java", "java"));
+        assert!(link_target_is_safe("jdk-25.0.5+8/a/b", "../../x"));
+        assert!(link_target_is_safe("a/b", ".."));
+        assert!(!link_target_is_safe("jdk-25.0.5+8/a/b", "../../../x"));
+        assert!(!link_target_is_safe("a", "../x"));
+        assert!(!link_target_is_safe("a/b", "/etc/passwd"));
+        assert!(!link_target_is_safe("a/b", "..\\..\\x"));
+        assert!(!link_target_is_safe("a/b", "C:/x"));
     }
 
     #[test]

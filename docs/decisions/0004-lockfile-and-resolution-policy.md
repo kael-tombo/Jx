@@ -54,7 +54,7 @@ the aligned subtree trimmed**, but any version-fork is reported:
 ### The lockfile (`jx.lock`)
 
 ```toml
-version = 2
+version = 3
 
 [jdk]
 provider = "temurin"
@@ -74,12 +74,22 @@ artifact = "junit-platform-console-standalone"
 version = "1.11.4"
 dev = true                                    # optional; dev-only scope
 sha256 = "…"
+
+[[artifact]]
+group = "org.mapstruct"
+artifact = "mapstruct-processor"
+version = "1.6.3"
+app = false                                   # optional; processor-only entry
+processor = true                              # optional; on -processorpath
+sha256 = "…"
 ```
 
-Schema version 2 adds the optional `dev` flag. Version 1 locks are still
-read and every entry is treated as a main artifact; `jx lock` rewrites them
-as version 2. The flag is omitted for main artifacts, so lock diffs stay
-small.
+Schema version 2 added the optional `dev` flag; version 3 adds `app` and
+`processor` (ADR 0014). `app` defaults to true and is serialized only when
+false; `processor` defaults to false and is serialized only when true.
+Version 1 and 2 locks are still read — every entry is an app artifact and no
+entry is a processor — and `jx lock` rewrites them as version 3. Flags keep
+their defaults omitted, so lock diffs stay small.
 
 * **Artifacts, not packages**: each listed entry is one fetchable file (the
   classifier/extension is part of the identity). POMs are not listed — they
@@ -97,8 +107,18 @@ small.
   `jx run` refuses a mismatched *provider* silently? No — a mismatch is a
   hard error; a different *build* of the same feature release is allowed
   with a warning line in verbose mode only.
+* **Implementation note (post-V1):** `jx lock` derives that entry from the
+  newest installed JDK for the manifest's feature and the cached install
+  archive's sha256, replacing an earlier pin for that feature; writing the
+  pin never starts a download by itself. Without an installed JDK the lock
+  keeps a matching existing pin, or stays unpinned. `jx build`, `jx run`,
+  `jx test`, packaging and the exporters use the exact installed release
+  when present and warn before using a different build of the same feature.
+  `jx fetch` resolves and installs that exact release from the provider,
+  verifying the archive against the locked sha256; a verified cached archive
+  works offline.
 * Unknown keys are diagnosed with the did-you-mean machinery (Kind::Lock);
-  `version` above 2 is refused with "the lockfile was written by a newer
+  `version` above 3 is refused with "the lockfile was written by a newer
   jx".
 
 ## Options considered
@@ -119,12 +139,17 @@ small.
   writes the wanted pin, resolve computes artifacts, fetch materializes the
   cache, build/run/test use the lock's sha256s for their classpath without
   the network (the M3 "lock fast path"). Since M4 the `dev` flag keeps
-  dev-only artifacts off javac's and java's main classpath."
+  dev-only artifacts off javac's and java's main classpath, and the
+  `app`/`processor` flags keep processor-only artifacts off the application
+  classpath while putting them on javac's processor path (ADR 0014)."
 * Version changes upstream (a repo publishes a higher `33.x` release) do
   NOT disturb an existing lockfile: concrete versions update only on an
-  explicit re-resolve (`jx lock`, or the lock that `jx add`/`jx remove`
-  performs) or a changed manifest entry. V1 has no separate `jx update`
-  verb; `jx lock` is the explicit refresh.
+  explicit re-resolve (`jx lock`, `jx update`, or the lock that
+  `jx add`/`jx remove` performs) or a changed manifest entry. `jx update`
+  reports the version transitions; with a direct target, every other direct
+  root is pinned to its locked version, so the other direct roots stay put;
+  transitives can still change with the target. Exact pins and platform
+  prefixes are not updated selectively.
 * `[overrides]` are honoured at every occurrence and every replacement is
   reported (implemented in `jx-resolve`).
 * **Implementation note (M3):** the resolver keeps parent edges alongside

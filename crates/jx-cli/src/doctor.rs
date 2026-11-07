@@ -1,8 +1,10 @@
-//! `jx doctor`: diagnose cache directory, config, network, JDK and disk space,
-//! with a fix hint per finding. Checks are read-only except for creating jx's
-//! own state directories under $JX_HOME (never the user's system Java).
+//! `jx doctor`: diagnose cache directory, config, network, JDK, optional
+//! adapters and disk space, with a fix hint per finding. Checks are read-only
+//! except for creating jx's own state directories under $JX_HOME (never the
+//! user's system Java).
 
 use std::net::{TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
@@ -65,6 +67,7 @@ pub fn run(cli: &Cli, colors: bool) -> Result<ExitCode, JxError> {
     check_config(&mut r);
     check_network(&mut r);
     check_java(&mut r);
+    check_adapters(&mut r);
     check_disk(&mut r);
 
     for f in &r.findings {
@@ -200,6 +203,105 @@ fn check_java(r: &mut Report) {
     }
 }
 
+/// Optional external tools jx delegates to. jx never installs them and works
+/// without them, so every finding is `info` (or a `warn` for a broken
+/// override) and none of them changes the exit code.
+fn check_adapters(r: &mut Report) {
+    let path = std::env::var_os("PATH");
+    let override_path = std::env::var_os("JX_JBANG").map(PathBuf::from);
+    let on_path = jx_interop::delegate::find_in_path("jbang", path.as_deref());
+    match jbang_state(override_path, on_path) {
+        JbangState::Override(tool) => r.push(
+            "jbang",
+            State::Info,
+            format!("JX_JBANG={} — `jx script` will use it", tool.display()),
+        ),
+        JbangState::OverrideMissing(tool) => r.push(
+            "jbang",
+            State::Warn,
+            format!(
+                "JX_JBANG points at {}, which is not a file\n         hint: unset JX_JBANG to use `jbang` from PATH, or point it at the executable",
+                tool.display()
+            ),
+        ),
+        JbangState::Path(tool) => r.push(
+            "jbang",
+            State::Info,
+            format!("{} — `jx script` will delegate to it", tool.display()),
+        ),
+        JbangState::Absent => r.push(
+            "jbang",
+            State::Info,
+            format!(
+                "not on PATH — optional, needed only by `jx script`\n         hint: install with {} (https://www.jbang.dev/download/)",
+                jx_interop::jbang::install_hint()
+            ),
+        ),
+    }
+
+    let managers = package_managers();
+    let mut found: Vec<&str> = Vec::new();
+    let mut missing: Vec<&str> = Vec::new();
+    for manager in managers {
+        if jx_interop::delegate::find_in_path(manager, path.as_deref()).is_some() {
+            found.push(manager);
+        } else {
+            missing.push(manager);
+        }
+    }
+    r.push("packages", State::Info, package_summary(&found, &missing));
+}
+
+/// The package managers the release renders manifests for. They are checked
+/// only so the user knows which install path exists on this machine.
+fn package_managers() -> &'static [&'static str] {
+    if cfg!(windows) {
+        &["winget", "choco", "scoop"]
+    } else {
+        &["brew"]
+    }
+}
+
+fn jbang_state(override_path: Option<PathBuf>, on_path: Option<PathBuf>) -> JbangState {
+    match override_path {
+        Some(tool) if tool.is_file() => JbangState::Override(tool),
+        Some(tool) => JbangState::OverrideMissing(tool),
+        None => match on_path {
+            Some(tool) => JbangState::Path(tool),
+            None => JbangState::Absent,
+        },
+    }
+}
+
+enum JbangState {
+    Override(PathBuf),
+    OverrideMissing(PathBuf),
+    Path(PathBuf),
+    Absent,
+}
+
+fn package_summary(found: &[&str], missing: &[&str]) -> String {
+    let mut parts = Vec::new();
+    if !found.is_empty() {
+        parts.push(format!("{} on PATH", join_names(found, "and")));
+    }
+    if !missing.is_empty() {
+        parts.push(format!("{} not found", join_names(missing, "or")));
+    }
+    format!(
+        "{} — installs stay with these tools; jx only renders their manifests",
+        parts.join("; ")
+    )
+}
+
+fn join_names(names: &[&str], conjunction: &str) -> String {
+    match names {
+        [] => String::new(),
+        [only] => (*only).to_string(),
+        [rest @ .., last] => format!("{} {conjunction} {last}", rest.join(", ")),
+    }
+}
+
 /// Best-effort probe of a system java; existence is never an error for jx.
 fn probe_java() -> Option<String> {
     let out = std::process::Command::new("java")
@@ -299,6 +401,66 @@ mod tests {
         assert_eq!(bytes_human(0), "0 B");
         assert_eq!(bytes_human(2048), "2.0 kiB");
         assert_eq!(bytes_human(3 * 1024 * 1024 * 1024), "3.0 GiB");
+    }
+
+    #[test]
+    fn package_summary_names_found_and_missing_managers() {
+        assert_eq!(
+            package_summary(&["winget", "scoop"], &["choco"]),
+            "winget and scoop on PATH; choco not found — installs stay with these tools; jx only renders their manifests"
+        );
+        assert!(
+            package_summary(&[], &["winget", "choco", "scoop"])
+                .starts_with("winget, choco or scoop not found"),
+            "a missing manager is still named"
+        );
+        assert!(package_summary(&["brew"], &[]).starts_with("brew on PATH"));
+    }
+
+    #[test]
+    fn name_lists_read_as_sentences() {
+        assert_eq!(join_names(&[], "and"), "");
+        assert_eq!(join_names(&["one"], "and"), "one");
+        assert_eq!(join_names(&["one", "two"], "and"), "one and two");
+        assert_eq!(
+            join_names(&["one", "two", "three"], "or"),
+            "one, two or three"
+        );
+    }
+
+    #[test]
+    fn the_platform_selects_the_managers_jx_renders() {
+        let managers = package_managers();
+        if cfg!(windows) {
+            assert_eq!(managers, ["winget", "choco", "scoop"]);
+        } else {
+            assert_eq!(managers, ["brew"]);
+        }
+    }
+
+    #[test]
+    fn an_override_wins_only_when_it_is_a_file() {
+        let dir = std::env::temp_dir().join(format!("jx-doctor-jbang-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let tool = dir.join("jbang-override");
+        std::fs::write(&tool, "").expect("fake tool");
+        let missing = dir.join("not-installed");
+
+        assert!(matches!(
+            jbang_state(Some(tool.clone()), None),
+            JbangState::Override(path) if path == tool
+        ));
+        assert!(matches!(
+            jbang_state(Some(missing.clone()), None),
+            JbangState::OverrideMissing(path) if path == missing
+        ));
+        assert!(matches!(
+            jbang_state(None, Some(tool.clone())),
+            JbangState::Path(path) if path == tool
+        ));
+        assert!(matches!(jbang_state(None, None), JbangState::Absent));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

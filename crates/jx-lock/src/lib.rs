@@ -16,16 +16,19 @@ use jx_common::diagnose::unknown_key_error;
 use jx_common::error::{JxError, Kind};
 
 /// The newest schema jx writes. Version 1 locks are still read (every entry
-/// counts as a main artifact); version 2 adds the optional `dev` flag.
-const SCHEMA_VERSION: u32 = 2;
+/// counts as a main artifact); version 2 adds the optional `dev` flag;
+/// version 3 adds the optional `app` and `processor` flags (ADR 0014).
+const SCHEMA_VERSION: u32 = 3;
 
 const LOCK_KEYS: [&str; 3] = ["artifact", "jdk", "version"];
 const JDK_KEYS: [&str; 4] = ["feature", "provider", "release", "sha256"];
-const ARTIFACT_KEYS: [&str; 6] = [
+const ARTIFACT_KEYS: [&str; 8] = [
+    "app",
     "artifact",
     "classifier",
     "dev",
     "group",
+    "processor",
     "sha256",
     "version",
 ];
@@ -55,6 +58,13 @@ pub struct PinnedArtifact {
     /// Reachable only through `[dev-dependencies]`; kept out of the main
     /// compile/run classpath. Omitted (false) for main and for v1 locks.
     pub dev: bool,
+    /// Part of the application graph (`[dependencies]` or
+    /// `[dev-dependencies]`). `app = false` is serialized only for entries
+    /// that exist solely for annotation processing.
+    pub app: bool,
+    /// On the annotation-processor path (`-processorpath`). An artifact can
+    /// be both `app` and `processor` when the same jar serves both roles.
+    pub processor: bool,
 }
 
 impl PinnedArtifact {
@@ -267,6 +277,8 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
     let mut classifier: Option<Option<String>> = None;
     let mut sha256: Option<String> = None;
     let mut dev = false;
+    let mut app = true;
+    let mut processor = false;
     for (key, value) in table {
         match key.as_str() {
             "group" => group = Some(string_field(key, value)?),
@@ -274,11 +286,9 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
             "version" => version = Some(string_field(key, value)?),
             "classifier" => classifier = Some(string_field(key, value).map(Some)?),
             "sha256" => sha256 = Some(checksum(key, value)?),
-            "dev" => {
-                dev = value.as_bool().ok_or_else(|| {
-                    JxError::new(Kind::Lock, "`dev` in jx.lock must be `true` or `false`")
-                })?
-            }
+            "dev" => dev = bool_field(key, value)?,
+            "app" => app = bool_field(key, value)?,
+            "processor" => processor = bool_field(key, value)?,
             other => {
                 return Err(unknown_key_error(
                     Kind::Lock,
@@ -305,7 +315,7 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
     }
     if !artifact_id
         .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
     {
         return Err(JxError::new(
             Kind::Lock,
@@ -321,6 +331,8 @@ fn parse_artifact(table: &toml::Table) -> Result<PinnedArtifact, JxError> {
         classifier: classifier.flatten(),
         sha256,
         dev,
+        app,
+        processor,
     })
 }
 
@@ -333,6 +345,15 @@ fn string_field(key: &str, value: &toml::Value) -> Result<String, JxError> {
         .as_str()
         .map(str::to_string)
         .ok_or_else(|| JxError::new(Kind::Lock, format!("`{key}` in jx.lock must be a string")))
+}
+
+fn bool_field(key: &str, value: &toml::Value) -> Result<bool, JxError> {
+    value.as_bool().ok_or_else(|| {
+        JxError::new(
+            Kind::Lock,
+            format!("`{key}` in jx.lock must be `true` or `false`"),
+        )
+    })
 }
 
 fn checksum(key: &str, value: &toml::Value) -> Result<String, JxError> {
@@ -384,6 +405,12 @@ pub fn to_canonical_text(lock: &Lockfile) -> String {
         }
         if artifact.dev {
             out.push_str("dev = true\n");
+        }
+        if !artifact.app {
+            out.push_str("app = false\n");
+        }
+        if artifact.processor {
+            out.push_str("processor = true\n");
         }
         out.push_str(&format!("sha256 = {}\n", quote(&artifact.sha256)));
     }
@@ -533,10 +560,28 @@ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n"
     }
 
     #[test]
+    fn dotted_artifact_names_are_accepted() {
+        // Real Maven artifactIds contain dots (`jakarta.annotation-api`); the
+        // lock writer records them, so the reader must accept the same
+        // identifier set as groups and manifest coordinates.
+        let raw = SAMPLE.replace(
+            "artifact = \"second\"",
+            "artifact = \"jakarta.annotation-api\"",
+        );
+        let lock = parse(&raw).expect("dotted artifact names parse");
+        assert!(
+            lock.artifacts
+                .iter()
+                .any(|artifact| artifact.artifact_id == "jakarta.annotation-api"),
+            "{lock:?}"
+        );
+    }
+
+    #[test]
     fn newer_schema_versions_are_refused() {
-        let raw = SAMPLE.replace("version = 1", "version = 3");
+        let raw = SAMPLE.replace("version = 1", "version = 4");
         let error = parse(&raw).expect_err("newer schema");
-        assert!(error.message.contains("versions 1 through 2"), "{error}");
+        assert!(error.message.contains("versions 1 through 3"), "{error}");
         assert!(
             error
                 .hint
@@ -544,6 +589,51 @@ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n"
                 .is_some_and(|hint| hint.contains("newer jx")),
             "{error}"
         );
+    }
+
+    #[test]
+    fn version_three_app_and_processor_flags_round_trip() {
+        let raw = "version = 3\n\
+\n\
+[[artifact]]\n\
+ group = \"g\"\n\
+ artifact = \"main\"\n\
+ version = \"1\"\n\
+ sha256 = \"1111111111111111111111111111111111111111111111111111111111111111\"\n\
+\n\
+[[artifact]]\n\
+ group = \"g\"\n\
+ artifact = \"processor-only\"\n\
+ version = \"2\"\n\
+ app = false\n\
+ processor = true\n\
+ sha256 = \"2222222222222222222222222222222222222222222222222222222222222222\"\n\
+\n\
+[[artifact]]\n\
+ group = \"g\"\n\
+ artifact = \"shared\"\n\
+ version = \"3\"\n\
+ processor = true\n\
+ sha256 = \"3333333333333333333333333333333333333333333333333333333333333333\"\n";
+        let lock = parse(raw).expect("parsed v3");
+        assert_eq!(lock.version, 3);
+        let main = lock.find("g", "main", None).expect("main");
+        assert!(main.app && !main.processor, "v3 defaults are app-only");
+        let processor = lock.find("g", "processor-only", None).expect("processor");
+        assert!(!processor.app && processor.processor);
+        let shared = lock.find("g", "shared", None).expect("shared");
+        assert!(shared.app && shared.processor);
+        let text = to_canonical_text(&lock);
+        assert!(text.contains("app = false"), "{text}");
+        assert!(text.contains("processor = true"), "{text}");
+        // A default entry serializes neither flag.
+        let main_block = text
+            .split("[[artifact]]")
+            .find(|block| block.contains("artifact = \"main\""))
+            .expect("main block");
+        assert!(!main_block.contains("app ="), "{text}");
+        assert!(!main_block.contains("processor ="), "{text}");
+        assert_eq!(parse(&text).expect("reparsed"), lock);
     }
 
     #[test]

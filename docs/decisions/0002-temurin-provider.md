@@ -2,7 +2,8 @@
 
 Date: 2026-10-30
 Status: accepted (facts verified live on this date by direct `curl` against
-`api.adoptium.net` and `/q/openapi.json`; re-verify before release work)
+`api.adoptium.net` and `/q/openapi.json`; the exact-release route was
+re-verified on 2026-11-06; re-verify before release work)
 
 ## Context and problem
 
@@ -33,6 +34,13 @@ pin by default. This ADR records the verified answers used by
   hex digest of the package** (verified present for GA packages; a known
   2026-10 mis-match case exists for one early-access build, so jx treats any
   checksum mismatch as a hard error rather than trying to be clever).
+* `GET /v3/assets/release_name/{vendor}/{release_name}` (e.g.
+  `/v3/assets/release_name/eclipse/jdk-25.0.5%2B8?os=windows&architecture=x64&image_type=jdk&vendor=eclipse`)
+  returns **one release object**, not an array, with `release_name` and a
+  `binaries` array; each binary carries `os`, `architecture`, `image_type`,
+  `jvm_impl` and `package.{link, checksum, size}`. The `+` in the path must be
+  `%2B`; `jx fetch` uses this route to restore the exact build named by
+  `[jdk]` in `jx.lock`.
 
 ## Decision
 

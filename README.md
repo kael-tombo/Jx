@@ -73,6 +73,8 @@ maintainer key yet, so the checksum and attestation are the available signals.
 cargo build --release        # jx lands in target/release/jx
 cargo fmt -- --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+# optional live Maven Central check; also runs weekly on Linux and Windows in CI
+cargo test -p jx-cli --test live_maven -- --ignored --nocapture
 ```
 
 Rust stable (edition 2024) on Linux (x64, arm64), macOS (x64, arm64) and
@@ -92,7 +94,9 @@ jx add com.google.guava:guava:33
 jx tree              # resolved graph, with conflicts named
 jx why com.google.guava:guava
 jx lock              # resolve and record exact versions + sha256
-jx fetch             # download/verify exactly what jx.lock pins
+jx update            # refresh prefix dependencies and print version changes
+jx update guava      # update one direct dependency, keeping the others locked
+jx fetch             # download/verify exactly what jx.lock pins, including its JDK
 jx run               # javac and java get the locked jars on their classpath
 jx package           # target/dist: runnable jar + lib/ dependency tree
 java -jar target/dist/hello-0.1.0.jar
@@ -102,10 +106,14 @@ jx image --full      # all linkable JDK modules when reflection needs them
 jx export maven --group-id com.example  # write a POM from the lockfile
 jx export gradle --group-id com.example # write build.gradle.kts + settings
 
-# Coming from Maven or Gradle
-jx import            # convert ./pom.xml, build.gradle(.kts) into project.toml
+# Coming from Maven, Gradle or jot
+jx import            # convert ./pom.xml, build.gradle(.kts) or jot.toml
 jx import service/pom.xml --dry-run  # print the manifest and notes only
 jx import app/build.gradle.kts --dry-run
+jx import jot.toml --dry-run
+
+# Scripts stay with JBang
+jx script hello.java Max   # delegate to JBang; its exit code is jx's
 
 # Or keep the native build and delegate build/test/clean to it
 #   [build]
@@ -119,8 +127,15 @@ jx add --dev org.junit.platform:junit-platform-console-standalone
 jx test              # compile src/test/java and run JUnit 5
 
 jx jdk list          # jx-managed JDKs live in ~/.jx/jdks, never near system Java
-jx doctor            # diagnose jx's home, cache, network, system Java, disk
+jx doctor            # diagnose jx's home, cache, network, system Java, disk, and the optional JBang and package-manager tools
 ```
+
+`jx update` re-resolves wanted prefixes and prints every old → new version.
+With a direct dependency (`alias` or `group:artifact`), every other direct
+root is pinned to its locked version, so the other direct roots stay put;
+transitives can still change with the target. Exact pins and platform
+prefixes are not updated selectively. Without a target, every wanted prefix
+is re-expanded.
 
 Builds skip javac when sources and the classpath are unchanged. Test sources
 are compiled against the main classes plus dev dependencies, and the JUnit
@@ -165,19 +180,33 @@ engine for one invocation.
 
 jx owns the path, not the tools. The JDK owns compilation, tests, linking and
 its own runtime tools; Maven Central owns artifact bytes; Maven and Gradle own
-the build when `[build] engine` delegates; Chocolatey, Homebrew, Scoop and the
-platform installer own OS installs; JBang owns scripts and single-file
-programs. The JBang and OS-installer adapters are **after V1** and are not
-wired yet. The boundary and the rules for adding an adapter are in
+the build when `[build] engine` delegates; JBang owns scripts and single-file
+programs through `jx script`; Chocolatey, Homebrew, Scoop, winget and the
+platform installer own OS installs. The boundary and the rules for adding an
+adapter are in
 [docs/decisions/0013-compose-the-ecosystem.md](docs/decisions/0013-compose-the-ecosystem.md).
+The first three post-V1 integrations are
+[0015](docs/decisions/0015-jbang-script-adapter.md) (delegated JBang scripts),
+[0016](docs/decisions/0016-jot-import.md) (`jot.toml` import) and
+[0017](docs/decisions/0017-os-package-manifests.md) (generated Chocolatey,
+Homebrew, Scoop and winget manifests).
 
-The five-minute path never requires any of those external tools.
+`jx script hello.java` requires JBang and hands it the script, its arguments
+and `--offline`; when the script sits above a jx manifest, jx also exports that
+project's pinned JDK. `jx import jot.toml` reads the Java-only, single-module
+subset of jot's manifest — including version catalogs and annotation
+processors — and prints every approximation; workspaces, path dependencies,
+Kotlin and non-Temurin pins are refused, and jot's default flat layout is
+imported with a note about moving sources. The five-minute path
+never requires any of those external tools.
 
-Not yet usable: annotation processors (deferred from M4), a separate `update`
-command (`jx lock` re-resolves wanted prefixes today), manifest-less
-delegation (a `project.toml` supplies the JDK pin), delegated `run` /
-`package` (use the build tool, or `--engine jx`), and the post-V1 JBang and
-OS-installer adapters.
+Not yet usable: manifest-less delegation (a `project.toml` supplies the JDK
+pin), delegated `run` / `package` (use the build tool, or `--engine jx`), and
+published OS package-manager entries. The release workflow generates and
+attaches Chocolatey, Homebrew, Scoop and winget manifests, but submitting them
+to those repositories needs the maintainer's review and credentials. Annotation
+processors run from `[processors]`; entries need explicit versions and cannot
+be platform BOMs.
 
 ## Design preview website
 

@@ -35,6 +35,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
 
+  # The site job runs on Linux, where winget and Chocolatey do not exist. This
+  # Windows job exercises the real Chocolatey packer and Ruby on every push;
+  # the renderer uses only Node built-ins, so no install step is needed.
+  packages:
+    name: OS package manifests (real validators)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Renderer tests
+        run: npm run test:packages
+      - name: Validate with the tools the runner has
+        run: npm run validate:packages
+
   # The brief asks CI to track binary size and startup time once there is a
   # binary worth measuring; added when M1 lands a real command budget.
 
@@ -58,6 +75,10 @@ jobs:
         run: npm run check
       - name: Spellcheck
         run: npm run spellcheck
+      - name: Package-manager manifest renderer
+        run: npm run test:packages
+      - name: Package-manager manifests (real validators when available)
+        run: npm run validate:packages
       - name: Playwright and axe (light and dark)
         run: npm test
       - name: Resolve the browser for Lighthouse

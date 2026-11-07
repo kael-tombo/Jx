@@ -42,11 +42,14 @@ install -m 755 jx-v1.0.0-x86_64-unknown-linux-gnu/jx ~/.local/bin/jx
 
 ```sh
 jx --version        # jx 1.0.0
-jx doctor           # home, cache, network, system Java, disk
+jx doctor           # home, cache, network, system Java, disk, optional tools
 ```
 
 `jx doctor` is diagnostic only. A missing system Java is fine: jx manages its
 own Temurin JDK under `~/.jx/jdks` and never touches the system installation.
+It also reports the optional tools jx delegates to: JBang (for `jx script`,
+honouring `JX_JBANG`) and the platform package managers the release renders
+manifests for. Those findings are informational; jx works without any of them.
 
 ## 3. First project
 
@@ -137,7 +140,10 @@ engine = "maven"    # or "gradle"
 ```
 
 Then `jx build`, `jx test` and `jx clean` run the project's wrapper with the
-pinned JDK. Dependency commands, `run`, `package`, `image` and exports are
+pinned JDK. Pass the tool's own flags after `--`, for example
+`jx build -- --parallel` or `jx test -- --tests app.LibTest`; jx's
+`--filter` and `--reports-dir` belong to its own test runner and stay
+refused here. Dependency commands, `run`, `package`, `image` and exports are
 refused in that mode; use the build tool or `--engine jx` for one command
 (ADR 0012).
 
